@@ -15,6 +15,9 @@ jobs:
         with:
           node-version: '20'
           
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+          
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
