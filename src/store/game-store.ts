@@ -85,6 +85,9 @@ type GameState = {
   }) => void;
   claimBonus: () => void;
   clearNotification: (id: string) => void;
+  tick: () => void;
+  setSecondsLeft: (seconds: number) => void;
+  syncData: () => () => void;
 };
 
 function notify(title: string, message: string, tone: Toast["tone"]): Toast {
@@ -281,6 +284,12 @@ export const useGameStore = create<GameState>()(
           }));
         }
       },
+      tick: () => {
+        set((state) => ({
+          secondsLeft: Math.max(0, state.secondsLeft - 1)
+        }));
+      },
+      setSecondsLeft: (secondsLeft) => set({ secondsLeft }),
       applyRoundStarted: () => {},
       applyCountdown: () => {},
       applyResult: () => {},

@@ -7,12 +7,20 @@ export function useLiveGame() {
   const syncData = useGameStore((state) => state.syncData);
   const setRealtimeStatus = useGameStore((state) => state.setRealtimeStatus);
 
+  const tick = useGameStore((state) => state.tick);
+
   useEffect(() => {
     setRealtimeStatus("connecting");
     const unsubscribe = syncData();
     
+    // Local countdown tick
+    const interval = setInterval(() => {
+      tick();
+    }, 1000);
+    
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(interval);
     };
-  }, [syncData, setRealtimeStatus]);
+  }, [syncData, setRealtimeStatus, tick]);
 }
