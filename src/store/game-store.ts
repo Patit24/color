@@ -203,6 +203,7 @@ export const useGameStore = create<GameState>()(
           }
         }, (error) => {
           console.error("Firestore Round Sync Error:", error);
+          // Only set offline if the main game round listener fails
           set({ realtimeStatus: "offline" });
         });
 
@@ -227,6 +228,10 @@ export const useGameStore = create<GameState>()(
           (snap) => {
             const ledger = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() } as TransactionRow));
             set({ ledger });
+          },
+          (error) => {
+            console.warn("Transactions Index building or failed:", error.message);
+            // Don't set offline, just keep ledger empty for now
           }
         );
 
