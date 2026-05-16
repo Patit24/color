@@ -202,8 +202,9 @@ export const initiateDeposit = functions.https.onCall(async (request) => {
 
     return { order };
   } catch (error: any) {
-    console.error("Razorpay Order Creation Error:", error);
-    throw new functions.https.HttpsError("internal", error.message || "Order creation failed");
+    console.error("Razorpay Order Creation Error:", JSON.stringify(error));
+    const msg = error.error?.description || error.message || "Order creation failed";
+    throw new functions.https.HttpsError("internal", msg);
   }
 });
 

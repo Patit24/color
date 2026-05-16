@@ -17,6 +17,6 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const functions = getFunctions(app);
+export const functions = getFunctions(app, "us-central1");
 
 export { app, auth, db, functions };
