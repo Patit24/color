@@ -14,13 +14,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
           
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
         
       - name: Build Next.js app
-        run: npm run build
+        run: |
+          npm run build
+          ls -la out || echo "Out directory not found!"
         
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -33,21 +34,16 @@ jobs:
         
       - name: Capacitor Sync
         run: |
-          npx cap sync android || echo "Skipping sync as android folder might not exist yet"
+          npx cap sync android
           
       - name: Build with Gradle
         run: |
-          if [ -d "android" ]; then
-            cd android
-            chmod +x gradlew
-            ./gradlew assembleRelease
-          else
-            echo "Android folder not found. Run 'npx cap add android' locally and commit it."
-            exit 1
-          fi
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
           
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          path: android/app/build/outputs/apk/release/*.apk
