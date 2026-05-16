@@ -1,17 +1,30 @@
 {
-  "name": "i-created-a-complete-blueprint-for",
+  "name": "color-trade",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "api:dev": "npm --prefix backend run dev",
+    "api:build": "npm --prefix backend run build"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "firebase": "^12.13.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
