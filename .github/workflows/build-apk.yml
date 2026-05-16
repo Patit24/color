@@ -24,6 +24,9 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
           
+      - name: Capacitor Sync
+        run: npx cap sync android
+          
       - name: Build with Gradle
         run: |
           cd android
