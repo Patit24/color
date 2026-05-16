@@ -106,11 +106,14 @@ exports.gameEngine = functions.scheduler.onSchedule("every 1 minutes", async (ev
             }
         }
         const historyRef = db.collection("games").doc(mode).collection("history").doc(period);
+        const colors = [resultNumber === 0 || resultNumber === 5 ? "Violet" : "", resultNumber % 2 === 0 ? "Red" : "Green"]
+            .filter(Boolean);
         batch.set(historyRef, {
             period,
             number: resultNumber,
             color: resultColor,
-            size: resultNumber >= 5 ? "big" : "small",
+            colors: colors,
+            size: resultNumber >= 5 ? "Big" : "Small",
             settledAt: admin.firestore.Timestamp.now()
         });
         const nextPeriod = (BigInt(period) + 1n).toString();

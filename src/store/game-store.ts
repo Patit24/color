@@ -210,7 +210,13 @@ export const useGameStore = create<GameState>()(
         const unsubHistory = onSnapshot(
           query(collection(db, "games", "win-go-1m", "history"), orderBy("settledAt", "desc"), limit(40)),
           (snap) => {
-            const history = snap.docs.map(doc => doc.data() as GameResult);
+            const history = snap.docs.map(doc => {
+              const data = doc.data();
+              return {
+                ...data,
+                colors: data.colors || getResultColors(data.number)
+              } as GameResult;
+            });
             set({ history });
           }
         );

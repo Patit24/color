@@ -462,14 +462,14 @@ function HistoryTable() {
                 <span>{row.size}</span>
                 <span
                   className={
-                  row.colors.includes("Green") && !row.colors.includes("Violet")
+                  row.colors?.includes("Green") && !row.colors?.includes("Violet")
                     ? "text-emerald-600"
-                    : row.colors.includes("Red") && !row.colors.includes("Violet")
+                    : row.colors?.includes("Red") && !row.colors?.includes("Violet")
                       ? "text-red-600"
                       : "text-violet-600"
                 }
               >
-                {row.colors.join(" + ")}
+                {row.colors?.join(" + ") || row.color}
               </span>
               </div>
             ))
