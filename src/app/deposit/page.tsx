@@ -30,7 +30,7 @@ export default function DepositPage() {
       const { order } = data;
 
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
+        key: "rzp_live_SggUT5PeRZ5V43",
         amount: order.amount,
         currency: order.currency,
         name: "Color Trade",

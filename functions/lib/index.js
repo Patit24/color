@@ -32,14 +32,11 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.reviewPayment = exports.toggleUserStatus = exports.createAdminUser = exports.getAdminData = exports.claimReferralEarnings = exports.getReferralData = exports.requestWithdrawal = exports.verifyDeposit = exports.initiateDeposit = exports.placeBet = exports.gameEngine = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const admin = __importStar(require("firebase-admin"));
-const razorpay_1 = __importDefault(require("razorpay"));
+const Razorpay = require("razorpay");
 const crypto = __importStar(require("crypto"));
 admin.initializeApp();
 const db = admin.firestore();
@@ -184,7 +181,7 @@ exports.initiateDeposit = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError("invalid-argument", "Minimum deposit ₹100");
     const key_id = "rzp_live_SggUT5PeRZ5V43";
     const key_secret = "Sc32Nofb9FYBHOabQrTFHDyi";
-    const rzp = new razorpay_1.default({
+    const rzp = new Razorpay({
         key_id,
         key_secret
     });
@@ -197,7 +194,8 @@ exports.initiateDeposit = functions.https.onCall(async (request) => {
         return { order };
     }
     catch (error) {
-        throw new functions.https.HttpsError("internal", error.message);
+        console.error("Razorpay Order Creation Error:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Order creation failed");
     }
 });
 exports.verifyDeposit = functions.https.onCall(async (request) => {

@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions/v2";
 import * as admin from "firebase-admin";
-import Razorpay from "razorpay";
+const Razorpay = require("razorpay");
 import * as crypto from "crypto";
 
 admin.initializeApp();
@@ -202,7 +202,8 @@ export const initiateDeposit = functions.https.onCall(async (request) => {
 
     return { order };
   } catch (error: any) {
-    throw new functions.https.HttpsError("internal", error.message);
+    console.error("Razorpay Order Creation Error:", error);
+    throw new functions.https.HttpsError("internal", error.message || "Order creation failed");
   }
 });
 
