@@ -258,7 +258,6 @@ export const useGameStore = create<GameState>()(
       applyCountdown: () => {},
       applyResult: () => {},
     }),
- }),
     {
       name: "color-pro-storage",
       storage: createJSONStorage(() => localStorage),
