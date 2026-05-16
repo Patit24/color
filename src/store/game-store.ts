@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { doc, onSnapshot, query, collection, orderBy, limit } from "firebase/firestore";
+import { doc, onSnapshot, query, collection, orderBy, limit, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, auth, functions } from "@/lib/firebase";
 import {
@@ -215,13 +215,24 @@ export const useGameStore = create<GameState>()(
           }
         );
 
+        // 4. Sync Transactions
+        const unsubLedger = onSnapshot(
+          query(collection(db, "transactions"), where("userId", "==", user.uid), orderBy("createdAt", "desc"), limit(20)),
+          (snap) => {
+            const ledger = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() } as TransactionRow));
+            set({ ledger });
+          }
+        );
+
         return () => {
           unsubWallet();
           unsubGame();
           unsubHistory();
+          unsubLedger();
         };
       },
-      syncHistory: async () => {}, // Handled by syncData snapshot
+      syncHistory: async () => {}, 
+      syncWallet: async () => {}, 
       placeBet: async () => {
         const state = get();
         const amount = state.baseStake * state.multiplier;
