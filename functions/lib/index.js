@@ -182,9 +182,15 @@ exports.initiateDeposit = functions.https.onCall(async (request) => {
         throw new functions.https.HttpsError("unauthenticated", "Login required");
     if (!amount || amount < 100)
         throw new functions.https.HttpsError("invalid-argument", "Minimum deposit ₹100");
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    const key_secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!key_id || !key_secret) {
+        console.error("RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing from environment");
+        throw new functions.https.HttpsError("internal", "Payment configuration error");
+    }
     const rzp = new razorpay_1.default({
-        key_id: process.env.RAZORPAY_KEY_ID || "",
-        key_secret: process.env.RAZORPAY_KEY_SECRET || ""
+        key_id,
+        key_secret
     });
     try {
         const order = await rzp.orders.create({
