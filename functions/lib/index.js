@@ -209,7 +209,11 @@ exports.verifyDeposit = functions.https.onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
-    const secret = process.env.RAZORPAY_KEY_SECRET || "";
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+        console.error("RAZORPAY_KEY_SECRET is missing from environment");
+        throw new functions.https.HttpsError("internal", "Payment configuration error");
+    }
     const generated_signature = crypto
         .createHmac("sha256", secret)
         .update(orderId + "|" + paymentId)
