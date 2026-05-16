@@ -137,7 +137,7 @@ export const useGameStore = create<GameState>()(
       ledger: [],
       realtimeStatus: "connecting",
       activeTab: gameTabs[1],
-      period: "Waiting for live round",
+      period: "Initializing...",
       secondsLeft: 0,
       selectedTarget: "green",
       multiplier: 1,
@@ -187,8 +187,7 @@ export const useGameStore = create<GameState>()(
         const unsubGame = onSnapshot(doc(db, "games", "win-go-1m", "live", "current"), (snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            // Calculate seconds left based on start time
-            const start = (data.startTime as any).toDate().getTime();
+            const start = data.startTime?.toDate().getTime() || Date.now();
             const now = Date.now();
             const elapsed = Math.floor((now - start) / 1000);
             const remaining = Math.max(0, 60 - elapsed);
@@ -198,7 +197,13 @@ export const useGameStore = create<GameState>()(
               secondsLeft: remaining,
               realtimeStatus: "live"
             });
+          } else {
+            console.warn("Live round document missing. Waiting for engine...");
+            set({ period: "Waiting for engine...", realtimeStatus: "connecting" });
           }
+        }, (error) => {
+          console.error("Firestore Round Sync Error:", error);
+          set({ realtimeStatus: "offline" });
         });
 
         // 3. Sync History

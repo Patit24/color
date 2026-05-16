@@ -4,12 +4,14 @@ import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBJ3MjAs_MRszfg_Y0JczR0qTaBlU3jSJs",
+  authDomain: "color-trade-4a76f.firebaseapp.com",
+  databaseURL: "https://color-trade-4a76f-default-rtdb.firebaseio.com",
+  projectId: "color-trade-4a76f",
+  storageBucket: "color-trade-4a76f.firebasestorage.app",
+  messagingSenderId: "471311069473",
+  appId: "1:471311069473:web:6cb1b046eb583dcf6d0e60",
+  measurementId: "G-5JEC92Y294"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
