@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Color Pro Prediction",
+  title: "Color Trade Prediction",
   description:
-    "Mobile-first color prediction dashboard prototype with real-time UI.",
+    "Real-time color prediction trading platform.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "ColorPro",
+    title: "ColorTrade",
     statusBarStyle: "black-translucent",
   },
 };
