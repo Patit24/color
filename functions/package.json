@@ -16,13 +16,12 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.8.0",
-    "firebase-admin": "^13.10.0",
-    "firebase-functions": "^7.2.5",
-    "firebase-functions-test": "^3.5.0",
     "typescript": "^6.0.3"
   },
   "private": true,
   "dependencies": {
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5",
     "crypto": "^1.0.1",
     "razorpay": "^2.9.6"
   }
