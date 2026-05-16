@@ -15,14 +15,6 @@ jobs:
         with:
           node-version: '20'
           
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-        
-      - name: Build Next.js app
-        run: |
-          npm run build
-          ls -la out || echo "Out directory not found!"
-        
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -32,10 +24,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         
-      - name: Capacitor Sync
-        run: |
-          npx cap sync android
-          
       - name: Build with Gradle
         run: |
           cd android
