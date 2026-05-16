@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Field, PrimaryAction, SimplePage } from "@/components/simple-page";
-import { apiRequest } from "@/lib/api-client";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 
 type ProfileUser = {
   userId: string;
@@ -26,31 +28,37 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    let active = true;
-    apiRequest<{ user: ProfileUser }>("/auth/me")
-      .then((payload) => {
-        if (active) setUser(payload.user);
-      })
-      .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : "Unable to load profile");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+      if (!currentUser) {
+        setLoading(false);
+        router.replace("/login");
+        return;
+      }
 
-    return () => {
-      active = false;
-    };
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          setUser({
+            userId: currentUser.uid,
+            ...userDoc.data() as any
+          });
+        }
+      } catch (err: any) {
+        setError(err.message || "Unable to load profile");
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   async function handleLogout() {
     setLoggingOut(true);
     setError("");
     try {
-      await apiRequest("/auth/logout", { method: "POST" });
-      window.localStorage.removeItem("accessToken");
+      await signOut(auth);
       router.replace("/login");
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Logout failed");
       setLoggingOut(false);

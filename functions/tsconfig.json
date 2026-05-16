@@ -3,6 +3,7 @@
     "module": "commonjs",
     "noImplicitAny": true,
     "outDir": "lib",
+    "rootDir": "src",
     "preserveConstEnums": true,
     "removeComments": true,
     "sourceMap": true,

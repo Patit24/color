@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { SimplePage } from "@/components/simple-page";
-import { apiRequest } from "@/lib/api-client";
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 import { Copy, Gift, Share2, Users, CircleDollarSign } from "lucide-react";
 
 type ReferralData = {
@@ -20,7 +21,8 @@ export default function ReferPage() {
 
   const load = async () => {
     try {
-      const res = await apiRequest<ReferralData>("/referrals");
+      const getReferralDataFn = httpsCallable(functions, "getReferralData");
+      const { data: res } = await getReferralDataFn() as any;
       setData(res);
     } catch (error) {
       console.error(error);
@@ -44,7 +46,8 @@ export default function ReferPage() {
     if (!data || data.referralBalance <= 0) return;
     setClaiming(true);
     try {
-      await apiRequest("/referrals/claim", { method: "POST" });
+      const claimFn = httpsCallable(functions, "claimReferralEarnings");
+      await claimFn();
       alert("Earnings claimed to winning wallet!");
       void load();
     } catch (error: any) {

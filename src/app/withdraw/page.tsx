@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { SimplePage } from "@/components/simple-page";
-import { apiRequest } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/store/game-store";
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 
 export default function WithdrawPage() {
   const [amount, setAmount] = useState("");
@@ -29,13 +30,11 @@ export default function WithdrawPage() {
 
     setLoading(true);
     try {
-      await apiRequest("/wallet/withdraw", {
-        method: "POST",
-        body: JSON.stringify({
-          amount: numAmount,
-          method,
-          payoutAddress,
-        }),
+      const withdrawFn = httpsCallable(functions, "requestWithdrawal");
+      await withdrawFn({
+        amount: numAmount,
+        upiId: method === "UPI" ? payoutAddress : "",
+        bankDetails: method === "BANK" ? payoutAddress : "",
       });
       alert("Withdrawal request submitted! It will be reviewed by admin.");
       await syncWallet();

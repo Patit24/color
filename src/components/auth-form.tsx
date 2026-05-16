@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { apiRequest } from "@/lib/api-client";
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 export function AuthForm() {
   const router = useRouter();
@@ -26,10 +27,9 @@ export function AuthForm() {
         setSubmitting(false);
         return;
       }
-      await apiRequest("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ identifier, password, remember }),
-      });
+      // Try email pattern if identifier is just a mobile or userId
+      const email = identifier.includes("@") ? identifier : `${identifier}@colortrade.app`;
+      await signInWithEmailAndPassword(auth, email, password);
       router.push("/");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Authentication failed");

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { SimplePage } from "@/components/simple-page";
-import { apiRequest } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 
 declare global {
   interface Window {
@@ -24,32 +25,30 @@ export default function DepositPage() {
 
     setLoading(true);
     try {
-      const { order, request } = await apiRequest<{ order: any; request: any }>("/wallet/deposit/razorpay", {
-        method: "POST",
-        body: JSON.stringify({ amount: Number(amount) }),
-      });
+      const initiateFn = httpsCallable(functions, "initiateDeposit");
+      const { data } = await initiateFn({ amount: Number(amount) }) as any;
+      const { order } = data;
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
         amount: order.amount,
         currency: order.currency,
-        name: "Color Pro Prediction",
+        name: "Color Trade",
         description: `Deposit for User Wallet`,
         order_id: order.id,
         handler: async function (response: any) {
           try {
-            await apiRequest("/wallet/deposit/razorpay/verify", {
-              method: "POST",
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
+            const verifyFn = httpsCallable(functions, "verifyDeposit");
+            await verifyFn({
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+              amount: Number(amount)
             });
             alert("Deposit successful!");
             router.push("/");
-          } catch (err) {
-            alert("Verification failed. Contact support.");
+          } catch (err: any) {
+            alert(err.message || "Verification failed. Contact support.");
           }
         },
         prefill: {

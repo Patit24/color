@@ -4,7 +4,8 @@ import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { apiRequest } from "@/lib/api-client";
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 export function AdminLogin() {
   const router = useRouter();
@@ -20,14 +21,8 @@ export function AdminLogin() {
     setLoading(true);
     setStatus("");
     try {
-      const response = await apiRequest<{ admin?: { passwordChangeRequired?: boolean } }>("/admin-auth/login", {
-        method: "POST",
-        body: JSON.stringify({ adminId: email, email, password, remember })
-      });
-      if (response.admin?.passwordChangeRequired) {
-        router.push("/admin/change-password");
-        return;
-      }
+      const adminEmail = email.includes("@") ? email : `${email}@colortrade.app`;
+      await signInWithEmailAndPassword(auth, adminEmail, password);
       router.push("/admin/dashboard");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to login");

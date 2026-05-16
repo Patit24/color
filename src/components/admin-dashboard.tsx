@@ -21,7 +21,9 @@ import {
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { apiRequest } from "@/lib/api-client";
+import { auth, functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import { signOut } from "firebase/auth";
 
 type Metrics = {
   totalUsers: number;
@@ -114,15 +116,13 @@ export function AdminDashboard() {
   async function createUser() {
     try {
       setStatus("Creating player account...");
-      await apiRequest("/admin/users", {
-        method: "POST",
-        body: JSON.stringify({
-          userId: newUser.userId,
-          fullName: newUser.fullName,
-          mobile: newUser.mobile,
-          password: newUser.password,
-          initialWalletBalance: newUser.initialBalance,
-        }),
+      const createUserFn = httpsCallable(functions, "createAdminUser");
+      await createUserFn({
+        userId: newUser.userId,
+        fullName: newUser.fullName,
+        mobile: newUser.mobile,
+        password: newUser.password,
+        initialBalance: newUser.initialBalance,
       });
       setShowAddUser(false);
       setNewUser({ userId: "", fullName: "", mobile: "", password: "", initialBalance: 0 });
@@ -136,36 +136,15 @@ export function AdminDashboard() {
   async function load() {
     try {
       setStatus("Syncing live node data...");
-      const [
-        metricData,
-        userData,
-        paymentData,
-        liveBetData,
-        fraudData,
-        profitData,
-        retentionData,
-        ledgerData,
-        adminData,
-      ] = await Promise.all([
-        apiRequest<Metrics>("/admin/metrics"),
-        apiRequest<{ users: AdminUser[] }>("/admin/users"),
-        apiRequest<{ requests: PaymentRequest[] }>("/admin/payments"),
-        apiRequest<{ bets: LiveBet[] }>("/admin/live-bets"),
-        apiRequest<{ events: FraudEvent[] }>("/admin/fraud"),
-        apiRequest<{ rows: ProfitRow[] }>("/admin/reports/daily-profit"),
-        apiRequest<{ rows: RetentionRow[] }>("/admin/reports/retention"),
-        apiRequest<{ transactions: any[] }>("/admin/transactions"),
-        apiRequest<{ admin: any }>("/admin-auth/me"),
-      ]);
-      setMetrics(metricData);
-      setUsers(userData.users);
-      setCurrentAdmin(adminData.admin);
-      setPayments(paymentData.requests);
-      setLiveBets(liveBetData.bets);
-      setFraud(fraudData.events);
-      setProfitRows(profitData.rows);
-      setRetentionRows(retentionData.rows);
-      setLedgerRows(ledgerData.transactions);
+      const getAdminDataFn = httpsCallable(functions, "getAdminData");
+      const { data } = await getAdminDataFn() as any;
+
+      setMetrics(data.metrics);
+      setUsers(data.users);
+      setCurrentAdmin(data.admin);
+      setPayments(data.payments);
+      setLiveBets(data.liveBets);
+      setLedgerRows(data.transactions);
       setStatus("Live admin data loaded");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to load admin data");
@@ -187,7 +166,7 @@ export function AdminDashboard() {
   }
 
   async function logout() {
-    await apiRequest("/admin-auth/logout", { method: "POST" });
+    await signOut(auth);
     router.push("/admin/login");
   }
 
@@ -345,7 +324,11 @@ export function AdminDashboard() {
                               <Eye size={14} />
                             </button>
                             <button
-                              onClick={() => void action(`/admin/users/${user._id}/toggle-status`, {}, "User status updated")}
+                              onClick={async () => {
+                                const toggleFn = httpsCallable(functions, "toggleUserStatus");
+                                await toggleFn({ targetUid: user._id });
+                                void load();
+                              }}
                               className="size-8 grid place-items-center rounded-lg bg-[#fff0ed] text-[#bb102d]"
                             >
                               <ShieldCheck size={14} />
@@ -433,13 +416,21 @@ export function AdminDashboard() {
                         </div>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => void action(`/admin/payments/${request._id}/review`, { action: "APPROVE" }, "Approved")}
+                            onClick={async () => {
+                              const reviewFn = httpsCallable(functions, "reviewPayment");
+                              await reviewFn({ requestId: request._id, action: "APPROVE" });
+                              void load();
+                            }}
                             className="rounded-lg bg-emerald-600 px-2 py-1 text-[10px] font-black text-white"
                           >
                             OK
                           </button>
                           <button
-                            onClick={() => void action(`/admin/payments/${request._id}/review`, { action: "REJECT" }, "Rejected")}
+                            onClick={async () => {
+                              const reviewFn = httpsCallable(functions, "reviewPayment");
+                              await reviewFn({ requestId: request._id, action: "REJECT" });
+                              void load();
+                            }}
                             className="rounded-lg bg-red-600 px-2 py-1 text-[10px] font-black text-white"
                           >
                             X
