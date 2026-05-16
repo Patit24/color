@@ -189,7 +189,7 @@ exports.initiateDeposit = functions.https.onCall(async (request) => {
         const order = await rzp.orders.create({
             amount: amount * 100,
             currency: "INR",
-            receipt: `rcpt_${uid}_${Date.now()}`
+            receipt: `rcpt_${Date.now()}`
         });
         return { order };
     }
