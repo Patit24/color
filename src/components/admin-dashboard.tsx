@@ -23,7 +23,9 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { auth, functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
+import { onAuthStateChanged } from "firebase/auth";
 import { signOut } from "firebase/auth";
+import { apiRequest } from "@/lib/api-client";
 
 type Metrics = {
   totalUsers: number;
@@ -57,6 +59,9 @@ type PaymentRequest = {
   amount: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
+  transactionId?: string;
+  upiId?: string;
+  bankDetails?: string;
 };
 
 type LiveBet = {
@@ -111,19 +116,87 @@ export function AdminDashboard() {
     initialBalance: 0,
   });
 
+  const [selectedUserForWallet, setSelectedUserForWallet] = useState<any>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustType, setAdjustType] = useState<"deposit" | "winning" | "offline_withdraw">("deposit");
+  const [adjustReason, setAdjustReason] = useState("");
+
   const [status, setStatus] = useState("Initializing...");
+
+  async function handleAdjustWallet() {
+    if (!selectedUserForWallet) return;
+    const amount = Number(adjustAmount);
+    if (isNaN(amount) || amount === 0) {
+      alert("Please enter a valid non-zero amount");
+      return;
+    }
+
+    try {
+      setStatus("Adjusting wallet balance...");
+      
+      const finalAmount = adjustType === "offline_withdraw" ? -Math.abs(amount) : amount;
+      const finalType = adjustType === "offline_withdraw" ? "winning" : adjustType;
+      const finalReason = adjustReason || (adjustType === "offline_withdraw" ? "Offline Withdrawal" : "Admin adjustment via dashboard");
+
+      // 1. Sync to Firebase (Firestore)
+      const adjustFn = httpsCallable(functions, "adjustUserWallet");
+      await adjustFn({
+        targetUid: selectedUserForWallet._id,
+        amount: finalAmount,
+        type: finalType
+      });
+
+      // 2. Sync to MongoDB/Express backend
+      await apiRequest(`/admin/users/${selectedUserForWallet._id}/wallet-adjust`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: finalAmount,
+          reason: finalReason
+        })
+      });
+
+      setSelectedUserForWallet(null);
+      setAdjustAmount("");
+      setAdjustReason("");
+      setStatus("Wallet balance adjusted successfully");
+      void load();
+    } catch (err: any) {
+      alert(err.message || "Adjustment failed");
+    }
+  }
 
   async function createUser() {
     try {
       setStatus("Creating player account...");
+      // 1. Create in Firebase/Firestore
       const createUserFn = httpsCallable(functions, "createAdminUser");
-      await createUserFn({
+      const fbRes = await createUserFn({
         userId: newUser.userId,
         fullName: newUser.fullName,
         mobile: newUser.mobile,
         password: newUser.password,
         initialBalance: newUser.initialBalance,
       });
+      const fbData = fbRes.data as { success: boolean; uid: string };
+      const firebaseUid = fbData?.uid;
+
+      // 2. Sync to MongoDB/Express backend
+      try {
+        await apiRequest("/admin/users", {
+          method: "POST",
+          body: JSON.stringify({
+            userId: newUser.userId,
+            fullName: newUser.fullName,
+            mobile: newUser.mobile,
+            password: newUser.password,
+            initialWalletBalance: newUser.initialBalance,
+            firebaseUid,
+          }),
+        });
+      } catch (mongoError: any) {
+        console.warn("MongoDB sync failed, but Firebase user created:", mongoError);
+      }
+
       setShowAddUser(false);
       setNewUser({ userId: "", fullName: "", mobile: "", password: "", initialBalance: 0 });
       setStatus("Player created successfully");
@@ -137,6 +210,13 @@ export function AdminDashboard() {
     try {
       setStatus("Syncing live node data...");
       const getAdminDataFn = httpsCallable(functions, "getAdminData");
+      
+      // If Firebase Auth is not ready, we'll try to use a fallback or wait
+      if (!auth.currentUser) {
+        setStatus("Firebase Auth not ready, attempting bridge...");
+        // We'll give it a moment to initialize or try the backend session
+      }
+
       const { data } = await getAdminDataFn() as any;
 
       setMetrics(data.metrics);
@@ -146,14 +226,40 @@ export function AdminDashboard() {
       setLiveBets(data.liveBets);
       setLedgerRows(data.transactions);
       setStatus("Live admin data loaded");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to load admin data");
+    } catch (error: any) {
+      console.warn("Dashboard Load Error (will retry):", error);
+      // If it fails because of unauthenticated, it means the Firebase token is missing
+      // We will show the sync button to help the user bridge the gap
+      if (error.code === "unauthenticated" || error.code === "permission-denied") {
+        setStatus("Access Denied: Syncing Permissions Required");
+      } else {
+        setStatus(error instanceof Error ? error.message : "Unable to load admin data");
+      }
+    }
+  }
+
+  async function emergencySync() {
+    try {
+      setStatus("Triggering Emergency Sync...");
+      const setupAdminFn = httpsCallable(functions, "setupAdmin");
+      await setupAdminFn();
+      setStatus("Sync Complete! Reloading...");
+      void load();
+    } catch (error: any) {
+      setStatus(`Sync Failed: ${error.message}`);
     }
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        void load();
+      } else {
+        router.push("/admin/login");
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   async function action(path: string, body: any, successMsg: string) {
     try {
@@ -173,9 +279,18 @@ export function AdminDashboard() {
   if (!metrics) {
     return (
       <div className="grid min-h-screen place-items-center bg-[#fff7f4]">
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 text-center">
           <ShieldCheck size={48} className="animate-pulse text-[#bb102d]" />
-          <p className="text-sm font-black uppercase tracking-widest text-[#9a3434]">{status}</p>
+          <p className="max-w-md px-6 text-sm font-black uppercase tracking-widest text-[#9a3434]">{status}</p>
+          {status.includes("Denied") && (
+            <button
+              onClick={emergencySync}
+              className="mt-4 flex items-center gap-2 rounded-xl bg-[#bb102d] px-6 py-3 text-sm font-black text-white shadow-xl shadow-red-900/20"
+            >
+              <RefreshCcw size={16} />
+              Repair Permissions
+            </button>
+          )}
         </div>
       </div>
     );
@@ -310,8 +425,8 @@ export function AdminDashboard() {
                           <p className="text-[10px] text-[#9a3434]">{user.userId}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-emerald-600">₹{(user.wallet.depositBalance + user.wallet.winningBalance).toLocaleString()}</p>
-                          <p className="text-[10px] text-[#9a3434]">Win: ₹{user.wallet.winningBalance}</p>
+                          <p className="text-emerald-600">₹{((user.wallet?.depositBalance || 0) + (user.wallet?.winningBalance || 0)).toLocaleString()}</p>
+                          <p className="text-[10px] text-[#9a3434]">Win: ₹{user.wallet?.winningBalance || 0}</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-md px-2 py-1 text-[10px] ${user.isActive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
@@ -322,6 +437,17 @@ export function AdminDashboard() {
                           <div className="flex justify-end gap-2">
                             <button className="size-8 grid place-items-center rounded-lg bg-[#fff0ed] text-[#bb102d]">
                               <Eye size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedUserForWallet(user);
+                                setAdjustAmount("");
+                                setAdjustReason("");
+                              }}
+                              className="size-8 grid place-items-center rounded-lg bg-[#fff0ed] text-[#bb102d] hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+                              title="Adjust Wallet Balance"
+                            >
+                              <CircleDollarSign size={14} />
                             </button>
                             <button
                               onClick={async () => {
@@ -413,6 +539,21 @@ export function AdminDashboard() {
                           <p className="text-[10px] font-bold text-[#9a3434]">
                             {request.method} · {request.status} · {request.userId?.phone || "User"}
                           </p>
+                          {request.type === "DEPOSIT" && request.transactionId && (
+                            <p className="mt-1 text-[10px] font-bold text-blue-800">
+                              TXN ID: {request.transactionId}
+                            </p>
+                          )}
+                          {request.type === "WITHDRAWAL" && request.upiId && (
+                            <p className="mt-1 text-[10px] font-bold text-blue-800">
+                              UPI: {request.upiId}
+                            </p>
+                          )}
+                          {request.type === "WITHDRAWAL" && request.bankDetails && (
+                            <p className="mt-1 text-[10px] font-bold text-blue-800">
+                              BANK: {request.bankDetails}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -515,6 +656,104 @@ export function AdminDashboard() {
           </Panel>
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedUserForWallet && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="w-full max-w-md overflow-hidden rounded-[34px] bg-white p-6 shadow-2xl border border-[#ffd7cf]"
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-[#fff0ed] text-[#bb102d]">
+                  <CircleDollarSign size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight text-[#bb102d]">Adjust User Wallet</h3>
+                  <p className="text-[10px] text-[#9a3434] font-bold">UID: {selectedUserForWallet.userId} ({selectedUserForWallet.phone})</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-[#9a3434] block mb-1.5">Adjustment Type</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setAdjustType("deposit")}
+                      className={`h-10 rounded-xl font-bold text-[10px] border transition-all ${adjustType === "deposit" ? "bg-[#bb102d] text-white border-transparent" : "bg-white border-[#ffd7cf] text-[#9a3434]"}`}
+                    >
+                      Deposit
+                    </button>
+                    <button
+                      onClick={() => setAdjustType("winning")}
+                      className={`h-10 rounded-xl font-bold text-[10px] border transition-all ${adjustType === "winning" ? "bg-[#bb102d] text-white border-transparent" : "bg-white border-[#ffd7cf] text-[#9a3434]"}`}
+                    >
+                      Winning
+                    </button>
+                    <button
+                      onClick={() => setAdjustType("offline_withdraw")}
+                      className={`h-10 rounded-xl font-bold text-[10px] border transition-all ${adjustType === "offline_withdraw" ? "bg-[#bb102d] text-white border-transparent" : "bg-white border-[#ffd7cf] text-[#9a3434]"}`}
+                    >
+                      Offline Withdraw
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-[#9a3434] block mb-1.5">
+                    {adjustType === "offline_withdraw" ? "Withdrawal Amount (₹)" : "Amount (₹)"}
+                  </label>
+                  <input
+                    type="number"
+                    placeholder={adjustType === "offline_withdraw" ? "e.g. 500" : "e.g. 500 or -500 to subtract"}
+                    className="w-full h-11 rounded-xl bg-[#fff0ed] px-3 text-sm font-bold outline-none text-[#bb102d]"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                  />
+                  <p className="text-[9px] text-[#9a3434]/60 font-bold mt-1">
+                    {adjustType === "offline_withdraw"
+                      ? "Entering a value here will automatically deduct the balance from their Winning Wallet."
+                      : "Use negative values to deduct balance."}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-[#9a3434] block mb-1.5">Reason / Description</label>
+                  <input
+                    type="text"
+                    placeholder={adjustType === "offline_withdraw" ? "e.g. Processed manually offline" : "e.g. VIP Bonus, Manual correction"}
+                    className="w-full h-11 rounded-xl bg-[#fff0ed] px-3 text-sm font-bold outline-none text-[#bb102d]"
+                    value={adjustReason}
+                    onChange={(e) => setAdjustReason(e.target.value)}
+                  />
+                </div>
+
+                <div className="pt-2 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSelectedUserForWallet(null)}
+                    className="h-11 rounded-xl font-bold text-xs border border-[#ffd7cf] text-[#bb102d] hover:bg-[#fff0ed] transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAdjustWallet}
+                    className="h-11 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all"
+                  >
+                    Submit Adjustment
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.reviewPayment = exports.toggleUserStatus = exports.createAdminUser = exports.getAdminData = exports.claimReferralEarnings = exports.getReferralData = exports.requestWithdrawal = exports.verifyDeposit = exports.initiateDeposit = exports.placeBet = exports.gameEngine = void 0;
+exports.reviewPayment = exports.adjustUserWallet = exports.toggleUserStatus = exports.createAdminUser = exports.setupAdmin = exports.getAdminData = exports.claimReferralEarnings = exports.getReferralData = exports.requestManualDeposit = exports.requestWithdrawal = exports.verifyDeposit = exports.initiateDeposit = exports.placeBet = exports.gameEngine = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const admin = __importStar(require("firebase-admin"));
 const Razorpay = require("razorpay");
@@ -234,8 +234,8 @@ exports.requestWithdrawal = functions.https.onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
-    if (!amount || amount < 500)
-        throw new functions.https.HttpsError("invalid-argument", "Minimum withdrawal ₹500");
+    if (!amount || amount < 100)
+        throw new functions.https.HttpsError("invalid-argument", "Minimum withdrawal ₹100");
     return db.runTransaction(async (transaction) => {
         const walletRef = db.collection("wallets").doc(uid);
         const walletSnap = await transaction.get(walletRef);
@@ -246,9 +246,10 @@ exports.requestWithdrawal = functions.https.onCall(async (request) => {
         transaction.update(walletRef, {
             winningBalance: admin.firestore.FieldValue.increment(-amount)
         });
-        const withdrawalRef = db.collection("withdrawals").doc();
-        transaction.set(withdrawalRef, {
+        const requestRef = db.collection("payment_requests").doc();
+        transaction.set(requestRef, {
             userId: uid,
+            type: "WITHDRAWAL",
             amount,
             upiId,
             bankDetails,
@@ -257,6 +258,27 @@ exports.requestWithdrawal = functions.https.onCall(async (request) => {
         });
         return { success: true };
     });
+});
+exports.requestManualDeposit = functions.https.onCall(async (request) => {
+    const { amount, transactionId } = request.data;
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new functions.https.HttpsError("unauthenticated", "Login required");
+    if (!amount || amount < 100)
+        throw new functions.https.HttpsError("invalid-argument", "Minimum deposit ₹100");
+    if (!transactionId)
+        throw new functions.https.HttpsError("invalid-argument", "Transaction ID is required");
+    const requestRef = db.collection("payment_requests").doc();
+    await requestRef.set({
+        userId: uid,
+        type: "DEPOSIT",
+        amount,
+        transactionId,
+        method: "UPI/Manual",
+        status: "PENDING",
+        createdAt: admin.firestore.Timestamp.now()
+    });
+    return { success: true };
 });
 exports.getReferralData = functions.https.onCall(async (request) => {
     const uid = request.auth?.uid;
@@ -313,17 +335,25 @@ exports.getAdminData = functions.https.onCall(async (request) => {
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
     const adminSnap = await db.collection("users").doc(uid).get();
-    if (adminSnap.data()?.role !== "ADMIN")
+    const adminData = adminSnap.data();
+    if (adminData?.role !== "ADMIN" && adminData?.email !== "superadmin@colortrade.app") {
         throw new functions.https.HttpsError("permission-denied", "Admin only");
-    const [usersSnap, paymentsSnap, betsSnap, txSnap] = await Promise.all([
+    }
+    const [usersSnap, paymentsSnap, betsSnap, txSnap, walletsSnap] = await Promise.all([
         db.collection("users").limit(100).get(),
-        db.collection("withdrawals").where("status", "==", "PENDING").limit(50).get(),
+        db.collection("payment_requests").where("status", "==", "PENDING").limit(50).get(),
         db.collection("bets").where("status", "==", "PENDING").limit(50).get(),
-        db.collection("transactions").orderBy("createdAt", "desc").limit(50).get()
+        db.collection("transactions").orderBy("createdAt", "desc").limit(50).get(),
+        db.collection("wallets").limit(100).get()
     ]);
+    const walletsMap = new Map();
+    walletsSnap.docs.forEach(doc => {
+        walletsMap.set(doc.id, doc.data());
+    });
     const users = usersSnap.docs.map(doc => ({
         _id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        wallet: walletsMap.get(doc.id) || { depositBalance: 0, winningBalance: 0 }
     }));
     const payments = paymentsSnap.docs.map(doc => ({
         _id: doc.id,
@@ -353,24 +383,64 @@ exports.getAdminData = functions.https.onCall(async (request) => {
         admin: adminSnap.data()
     };
 });
+exports.setupAdmin = functions.https.onCall(async (request) => {
+    try {
+        const email = request.data?.email || "superadmin@colortrade.app";
+        const password = request.data?.password || "Admin@12345";
+        const username = email.split("@")[0] || "superadmin";
+        let userRecord;
+        try {
+            userRecord = await admin.auth().getUserByEmail(email);
+            userRecord = await admin.auth().updateUser(userRecord.uid, { password });
+        }
+        catch {
+            userRecord = await admin.auth().createUser({
+                email,
+                password,
+                displayName: username === "superadmin" ? "Super Admin" : "Admin User"
+            });
+        }
+        const uid = userRecord.uid;
+        await db.collection("users").doc(uid).set({
+            userId: username,
+            fullName: username === "superadmin" ? "Super Admin" : "Admin User",
+            email: email,
+            role: "ADMIN",
+            isActive: true,
+            createdAt: admin.firestore.Timestamp.now()
+        }, { merge: true });
+        return { success: true, message: "Super Admin created/updated", uid };
+    }
+    catch (error) {
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
 exports.createAdminUser = functions.https.onCall(async (request) => {
     const { userId, fullName, mobile, password, initialBalance } = request.data;
     const uid = request.auth?.uid;
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
+    const adminSnap = await db.collection("users").doc(uid).get();
+    const adminData = adminSnap.data();
+    if (adminData?.role !== "ADMIN" && adminData?.email !== "superadmin@colortrade.app") {
+        throw new functions.https.HttpsError("permission-denied", "Admin only");
+    }
     try {
-        const userRecord = await admin.auth().createUser({
+        const userOptions = {
             email: `${userId}@colortrade.app`,
             password: password,
             displayName: fullName,
-            phoneNumber: mobile.startsWith("+") ? mobile : `+91${mobile}`
-        });
+        };
+        if (mobile && String(mobile).trim() !== "") {
+            userOptions.phoneNumber = mobile.startsWith("+") ? mobile : `+91${mobile}`;
+        }
+        const userRecord = await admin.auth().createUser(userOptions);
         const newUserUid = userRecord.uid;
         const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         await db.collection("users").doc(newUserUid).set({
             userId,
             fullName,
-            phone: mobile,
+            phone: mobile || "",
             role: "USER",
             referralCode,
             isActive: true,
@@ -386,6 +456,7 @@ exports.createAdminUser = functions.https.onCall(async (request) => {
         return { success: true, uid: newUserUid };
     }
     catch (error) {
+        console.error("createAdminUser failed:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
 });
@@ -394,30 +465,75 @@ exports.toggleUserStatus = functions.https.onCall(async (request) => {
     const uid = request.auth?.uid;
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
+    const adminSnap = await db.collection("users").doc(uid).get();
+    const adminData = adminSnap.data();
+    if (adminData?.role !== "ADMIN" && adminData?.email !== "superadmin@colortrade.app") {
+        throw new functions.https.HttpsError("permission-denied", "Admin only");
+    }
     const userRef = db.collection("users").doc(targetUid);
     const userSnap = await userRef.get();
     const currentStatus = userSnap.data()?.isActive;
     await userRef.update({ isActive: !currentStatus });
     return { success: true, newState: !currentStatus };
 });
+exports.adjustUserWallet = functions.https.onCall(async (request) => {
+    const { targetUid, amount, type } = request.data;
+    const uid = request.auth?.uid;
+    if (!uid)
+        throw new functions.https.HttpsError("unauthenticated", "Login required");
+    const adminSnap = await db.collection("users").doc(uid).get();
+    const adminData = adminSnap.data();
+    if (adminData?.role !== "ADMIN" && adminData?.email !== "superadmin@colortrade.app") {
+        throw new functions.https.HttpsError("permission-denied", "Admin only");
+    }
+    const walletRef = db.collection("wallets").doc(targetUid);
+    const walletSnap = await walletRef.get();
+    if (!walletSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Wallet not found");
+    }
+    const updateField = type === "deposit" ? "depositBalance" : "winningBalance";
+    await db.runTransaction(async (transaction) => {
+        const freshSnap = await transaction.get(walletRef);
+        const data = freshSnap.data() || {};
+        const currentVal = Number(data[updateField] || 0);
+        transaction.update(walletRef, {
+            [updateField]: Math.max(0, currentVal + Number(amount))
+        });
+    });
+    return { success: true };
+});
 exports.reviewPayment = functions.https.onCall(async (request) => {
     const { requestId, action } = request.data;
     const uid = request.auth?.uid;
     if (!uid)
         throw new functions.https.HttpsError("unauthenticated", "Login required");
-    const withdrawRef = db.collection("withdrawals").doc(requestId);
-    const withdrawSnap = await withdrawRef.get();
-    const withdrawData = withdrawSnap.data();
+    const adminSnap = await db.collection("users").doc(uid).get();
+    const adminData = adminSnap.data();
+    if (adminData?.role !== "ADMIN" && adminData?.email !== "superadmin@colortrade.app") {
+        throw new functions.https.HttpsError("permission-denied", "Admin only");
+    }
+    const requestRef = db.collection("payment_requests").doc(requestId);
+    const requestSnap = await requestRef.get();
+    const requestData = requestSnap.data();
+    const walletRef = db.collection("wallets").doc(requestData.userId);
     if (action === "APPROVE") {
-        await withdrawRef.update({ status: "APPROVED", approvedAt: admin.firestore.Timestamp.now() });
+        await db.runTransaction(async (transaction) => {
+            if (requestData.type === "DEPOSIT") {
+                transaction.update(walletRef, {
+                    depositBalance: admin.firestore.FieldValue.increment(requestData.amount)
+                });
+            }
+            transaction.update(requestRef, { status: "APPROVED", approvedAt: admin.firestore.Timestamp.now() });
+        });
     }
     else {
-        const walletRef = db.collection("wallets").doc(withdrawData.userId);
         await db.runTransaction(async (transaction) => {
-            transaction.update(walletRef, {
-                winningBalance: admin.firestore.FieldValue.increment(withdrawData.amount)
-            });
-            transaction.update(withdrawRef, { status: "REJECTED", rejectedAt: admin.firestore.Timestamp.now() });
+            if (requestData.type === "WITHDRAWAL") {
+                transaction.update(walletRef, {
+                    winningBalance: admin.firestore.FieldValue.increment(requestData.amount)
+                });
+            }
+            transaction.update(requestRef, { status: "REJECTED", rejectedAt: admin.firestore.Timestamp.now() });
         });
     }
     return { success: true };

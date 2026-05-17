@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import { connectMongo } from "./config/db.js";
 import { env } from "./config/env.js";
 import { createApp } from "./app.js";
+import { corsOriginResolver } from "./config/cors.js";
 import { registerSocketHandlers } from "./socket/index.js";
 import { GameEngine } from "./services/gameEngine.js";
 import { seedDefaultAccounts } from "./services/bootstrapService.js";
@@ -14,7 +15,7 @@ async function bootstrap() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: env.CLIENT_ORIGIN,
+      origin: corsOriginResolver,
       credentials: true
     }
   });

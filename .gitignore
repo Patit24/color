@@ -40,3 +40,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# mobile & build artifacts
+*.apk
+/android/app/build/
+/android/.gradle/
+/out/
+
+# logs & temporary data
+*.log
+/scratch/
+/users*.json
+/functions_createAdminUser.log

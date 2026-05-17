@@ -53,6 +53,7 @@ type BackendWallet = {
 
 type GameState = {
   balance: number;
+  winBalance: number;
   ledger: TransactionRow[];
   realtimeStatus: "connecting" | "live" | "offline";
   activeTab: GameMode;
@@ -172,77 +173,172 @@ export const useGameStore = create<GameState>()(
           ],
         })),
       syncData: () => {
-        const user = auth.currentUser;
-        if (!user) return () => {};
+        let activeUnsubscribe: (() => void) | null = null;
 
-        // 1. Sync Wallet
-        const unsubWallet = onSnapshot(doc(db, "wallets", user.uid), (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            set({ 
-              balance: data.depositBalance || 0,
-              winBalance: data.winningBalance || 0 
-            });
+        const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+          // Tear down existing listeners if any
+          if (activeUnsubscribe) {
+            activeUnsubscribe();
+            activeUnsubscribe = null;
           }
+
+          if (!user) {
+            // Guest or non-logged-in mode: Sync only public live game round and game history
+            const unsubGame = onSnapshot(doc(db, "games", "win-go-1m", "live", "current"), (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                const start = data.startTime?.toDate().getTime() || Date.now();
+                const now = Date.now();
+                const elapsed = Math.floor((now - start) / 1000);
+                const remaining = Math.max(0, 60 - elapsed);
+                
+                set({ 
+                  period: data.period,
+                  secondsLeft: remaining,
+                  realtimeStatus: "live"
+                });
+              } else {
+                console.warn("Live round document missing. Waiting for engine...");
+                set({ period: "Waiting for engine...", realtimeStatus: "connecting" });
+              }
+            }, (error) => {
+              console.error("Firestore Round Sync Error:", error);
+              set({ realtimeStatus: "offline" });
+            });
+
+            const unsubHistory = onSnapshot(
+              query(collection(db, "games", "win-go-1m", "history"), orderBy("settledAt", "desc"), limit(40)),
+              (snap) => {
+                const history = snap.docs.map(doc => {
+                  const data = doc.data();
+                  return {
+                    ...data,
+                    colors: data.colors || getResultColors(data.number)
+                  } as GameResult;
+                });
+                set({ history });
+              }
+            );
+
+            activeUnsubscribe = () => {
+              unsubGame();
+              unsubHistory();
+            };
+            return;
+          }
+
+          // Logged-in mode: Sync wallet, live round, game history, transactions, and my bets
+          const unsubWallet = onSnapshot(doc(db, "wallets", user.uid), (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              set({ 
+                balance: data.depositBalance || 0,
+                winBalance: data.winningBalance || 0 
+              });
+            }
+          });
+
+          const unsubGame = onSnapshot(doc(db, "games", "win-go-1m", "live", "current"), (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              const start = data.startTime?.toDate().getTime() || Date.now();
+              const now = Date.now();
+              const elapsed = Math.floor((now - start) / 1000);
+              const remaining = Math.max(0, 60 - elapsed);
+              
+              set({ 
+                period: data.period,
+                secondsLeft: remaining,
+                realtimeStatus: "live"
+              });
+            } else {
+              console.warn("Live round document missing. Waiting for engine...");
+              set({ period: "Waiting for engine...", realtimeStatus: "connecting" });
+            }
+          }, (error) => {
+            console.error("Firestore Round Sync Error:", error);
+            set({ realtimeStatus: "offline" });
+          });
+
+          const unsubHistory = onSnapshot(
+            query(collection(db, "games", "win-go-1m", "history"), orderBy("settledAt", "desc"), limit(40)),
+            (snap) => {
+              const history = snap.docs.map(doc => {
+                const data = doc.data();
+                return {
+                  ...data,
+                  colors: data.colors || getResultColors(data.number)
+                } as GameResult;
+              });
+              set({ history });
+            }
+          );
+
+          const unsubLedger = onSnapshot(
+            query(collection(db, "transactions"), where("userId", "==", user.uid), limit(20)),
+            (snap) => {
+              const ledger = snap.docs.map(doc => ({ _id: doc.id, ...doc.data(), createdAt: doc.data().createdAt?.toMillis() || Date.now() }));
+              ledger.sort((a, b) => b.createdAt - a.createdAt);
+              set({ ledger: ledger as any[] });
+            },
+            (error) => {
+              console.warn("Transactions Index building or failed:", error.message);
+            }
+          );
+
+          const unsubMyBets = onSnapshot(
+            query(collection(db, "bets"), where("userId", "==", user.uid), limit(40)),
+            (snap) => {
+              const bets = snap.docs.map((doc) => {
+                const data = doc.data();
+                return {
+                  id: doc.id,
+                  period: data.period,
+                  target: data.targetValue || data.targetType || data.selection,
+                  amount: data.amount,
+                  status: (data.status === "WON" || data.status === "WIN") ? "Won" : (data.status === "LOST" || data.status === "LOSS") ? "Lost" : "Pending",
+                  profit: data.winAmount || data.profit || 0,
+                  createdAt: data.createdAt?.toMillis() || Date.now(),
+                } as UserBet & { createdAt: number };
+              });
+
+              bets.sort((a, b) => b.createdAt - a.createdAt);
+
+              set((state) => {
+                const prevBets = state.myHistory;
+                let newNotifications = [...state.notifications];
+                
+                bets.forEach((newBet) => {
+                  const prevBet = prevBets.find((b) => b.id === newBet.id);
+                  if (prevBet && prevBet.status === "Pending" && newBet.status !== "Pending") {
+                    if (newBet.status === "Won") {
+                      newNotifications = [notify("Bet Won! 🎉", `You won ₹${newBet.profit}`, "win"), ...newNotifications];
+                    } else if (newBet.status === "Lost") {
+                      newNotifications = [notify("Bet Lost 😢", `You lost your bet`, "loss"), ...newNotifications];
+                    }
+                  }
+                });
+
+                return { myHistory: bets, notifications: newNotifications };
+              });
+            },
+            (error) => console.warn("My Bets sync failed:", error.message)
+          );
+
+          activeUnsubscribe = () => {
+            unsubWallet();
+            unsubGame();
+            unsubHistory();
+            unsubLedger();
+            unsubMyBets();
+          };
         });
-
-        // 2. Sync Live Round
-        const unsubGame = onSnapshot(doc(db, "games", "win-go-1m", "live", "current"), (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            const start = data.startTime?.toDate().getTime() || Date.now();
-            const now = Date.now();
-            const elapsed = Math.floor((now - start) / 1000);
-            const remaining = Math.max(0, 60 - elapsed);
-            
-            set({ 
-              period: data.period,
-              secondsLeft: remaining,
-              realtimeStatus: "live"
-            });
-          } else {
-            console.warn("Live round document missing. Waiting for engine...");
-            set({ period: "Waiting for engine...", realtimeStatus: "connecting" });
-          }
-        }, (error) => {
-          console.error("Firestore Round Sync Error:", error);
-          // Only set offline if the main game round listener fails
-          set({ realtimeStatus: "offline" });
-        });
-
-        // 3. Sync History
-        const unsubHistory = onSnapshot(
-          query(collection(db, "games", "win-go-1m", "history"), orderBy("settledAt", "desc"), limit(40)),
-          (snap) => {
-            const history = snap.docs.map(doc => {
-              const data = doc.data();
-              return {
-                ...data,
-                colors: data.colors || getResultColors(data.number)
-              } as GameResult;
-            });
-            set({ history });
-          }
-        );
-
-        // 4. Sync Transactions
-        const unsubLedger = onSnapshot(
-          query(collection(db, "transactions"), where("userId", "==", user.uid), orderBy("createdAt", "desc"), limit(20)),
-          (snap) => {
-            const ledger = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() } as TransactionRow));
-            set({ ledger });
-          },
-          (error) => {
-            console.warn("Transactions Index building or failed:", error.message);
-            // Don't set offline, just keep ledger empty for now
-          }
-        );
 
         return () => {
-          unsubWallet();
-          unsubGame();
-          unsubHistory();
-          unsubLedger();
+          unsubscribeAuth();
+          if (activeUnsubscribe) {
+            activeUnsubscribe();
+          }
         };
       },
       syncHistory: async () => {}, 

@@ -37,11 +37,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     path.startsWith("/admin/") &&
     !options.skipRefresh
   ) {
-    await apiRequest("/admin-auth/refresh", {
-      method: "POST",
-      skipRefresh: true,
-    });
-    return apiRequest<T>(path, { ...options, skipRefresh: true });
+    try {
+      await apiRequest("/admin-auth/refresh", {
+        method: "POST",
+        skipRefresh: true,
+      });
+      return apiRequest<T>(path, { ...options, skipRefresh: true });
+    } catch {
+      if (typeof window !== "undefined") {
+        window.location.href = "/admin/login";
+      }
+      throw new Error("Admin session expired. Please log in again.");
+    }
   }
 
   if (!response.ok) {

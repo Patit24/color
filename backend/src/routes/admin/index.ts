@@ -1,4 +1,5 @@
 import { Router } from "express";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { customAlphabet } from "nanoid";
 import { User } from "../../models/User.js";
@@ -98,6 +99,7 @@ adminRouter.post("/users", verifyPermission("manage_users"), async (req, res, ne
       telegramUsername: req.body.telegramUsername,
       referralCode: req.body.referralCode || referralCode(),
       passwordHash: await bcrypt.hash(password, 12),
+      firebaseUid: req.body.firebaseUid,
       role: "real_user",
       accountType: "REAL",
       status: "ACTIVE",
@@ -327,18 +329,35 @@ adminRouter.post("/users/:id/wallet-adjust", verifyPermission("manage_wallets"),
     const reason = String(req.body.reason || "Admin adjustment");
     if (!Number.isFinite(amount) || amount === 0) return res.status(400).json({ error: "Invalid amount" });
 
+    // Look up user by MongoDB ObjectId, firebaseUid, or userId
+    const idParam = String(req.params.id);
+    let user = null;
+    if (mongoose.Types.ObjectId.isValid(idParam)) {
+      user = await User.findById(idParam);
+    }
+    if (!user) {
+      user = await User.findOne({
+        $or: [
+          { firebaseUid: idParam },
+          { userId: idParam.toLowerCase() }
+        ]
+      });
+    }
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
     const wallet = await Wallet.findOneAndUpdate(
-      { userId: req.params.id },
+      { userId: user._id },
       { $inc: { winningBalance: amount, withdrawableBalance: amount } },
       { new: true, upsert: true }
     );
     await Transaction.create({
-      userId: req.params.id,
+      userId: user._id,
       walletId: wallet._id,
       type: "ADMIN_ADJUSTMENT",
       amount,
       status: "SUCCESS",
-        metadata: { reason, adminId: req.admin!.adminId }
+      metadata: { reason, adminId: req.admin!.adminId }
     });
     await AdminLog.create({
       adminId: req.admin!.adminId,
@@ -370,20 +389,51 @@ adminRouter.post("/payments/:id/review", verifyPermission("manage_payments"), as
     request.reviewedAt = new Date();
     await request.save();
 
-    if (action === "APPROVE" && request.type === "DEPOSIT") {
-      const wallet = await Wallet.findOneAndUpdate(
-        { userId: request.userId },
-        { $inc: { depositBalance: request.amount } },
-        { new: true, upsert: true }
-      );
-      await Transaction.create({
-        userId: request.userId,
-        walletId: wallet._id,
-        type: "DEPOSIT_APPROVED",
-        amount: request.amount,
-        status: "SUCCESS",
-        referenceId: String(request._id)
-      });
+    if (action === "APPROVE") {
+      if (request.type === "DEPOSIT") {
+        const wallet = await Wallet.findOneAndUpdate(
+          { userId: request.userId },
+          { $inc: { depositBalance: request.amount } },
+          { new: true, upsert: true }
+        );
+        await Transaction.create({
+          userId: request.userId,
+          walletId: wallet._id,
+          type: "DEPOSIT_APPROVED",
+          amount: request.amount,
+          status: "SUCCESS",
+          referenceId: String(request._id)
+        });
+      } else if (request.type === "WITHDRAWAL") {
+        const wallet = await Wallet.findOne({ userId: request.userId });
+        if (wallet) {
+          await Transaction.create({
+            userId: request.userId,
+            walletId: wallet._id,
+            type: "WITHDRAWAL_APPROVED",
+            amount: -request.amount,
+            status: "SUCCESS",
+            referenceId: String(request._id)
+          });
+        }
+      }
+    } else {
+      // REJECTED
+      if (request.type === "WITHDRAWAL") {
+        const wallet = await Wallet.findOneAndUpdate(
+          { userId: request.userId },
+          { $inc: { winningBalance: request.amount } }, // Refund
+          { new: true, upsert: true }
+        );
+        await Transaction.create({
+          userId: request.userId,
+          walletId: wallet._id,
+          type: "WITHDRAWAL_REJECTED",
+          amount: request.amount,
+          status: "FAILED",
+          referenceId: String(request._id)
+        });
+      }
     }
 
     await AdminLog.create({

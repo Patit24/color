@@ -4,8 +4,9 @@ import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { auth } from "@/lib/firebase";
+import { auth, functions } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 
 export function AdminLogin() {
   const router = useRouter();
@@ -21,11 +22,44 @@ export function AdminLogin() {
     setLoading(true);
     setStatus("");
     try {
-      const adminEmail = email.includes("@") ? email : `${email}@colortrade.app`;
-      await signInWithEmailAndPassword(auth, adminEmail, password);
+      // 1. Authenticate with Local Backend API
+      const { apiRequest } = await import("@/lib/api-client");
+      const response = await apiRequest<{ success: boolean; admin: any; message?: string }>("/admin-auth/login", {
+        method: "POST",
+        body: JSON.stringify({ identifier: email, password })
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || "Invalid credentials");
+      }
+
+      // 2. Bridge to Firebase (for Firestore access)
+      try {
+        const adminEmail = email.includes("@") ? email : `${email}@colortrade.app`;
+        await signInWithEmailAndPassword(auth, adminEmail, password);
+      } catch (firebaseError: any) {
+        console.warn("Firebase bridge failed:", firebaseError.code);
+        
+        // If the Firebase account is missing or password mismatched, we can auto-sync using the emergency cloud function
+        if (firebaseError.code === "auth/user-not-found" || firebaseError.code === "auth/invalid-credential") {
+          try {
+            const adminEmail = email.includes("@") ? email : `${email}@colortrade.app`;
+            const setupAdminFn = httpsCallable(functions, "setupAdmin");
+            await setupAdminFn({ email: adminEmail, password });
+            // Retry login after sync
+            await signInWithEmailAndPassword(auth, adminEmail, password);
+          } catch (syncError: any) {
+            throw new Error("Local login succeeded, but Firebase bridge sync failed: " + (syncError?.message || String(syncError)));
+          }
+        } else {
+          throw new Error("Local login succeeded, but Firebase auth failed: " + firebaseError.message);
+        }
+      }
+
       router.push("/admin/dashboard");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to login");
+      setPassword(""); // Security: clear password on fail
     } finally {
       setLoading(false);
     }

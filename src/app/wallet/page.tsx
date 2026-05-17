@@ -8,6 +8,7 @@ import { ArrowUpRight, ArrowDownLeft, Clock } from "lucide-react";
 
 export default function WalletPage() {
   const balance = useGameStore((state) => state.balance);
+  const winBalance = useGameStore((state) => state.winBalance);
   const ledger = useGameStore((state) => state.ledger);
   const syncWallet = useGameStore((state) => state.syncWallet);
 
@@ -20,7 +21,7 @@ export default function WalletPage() {
       <div className="space-y-4">
         <div className="rounded-[28px] bg-white p-6 shadow-xl shadow-red-900/10">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9a3434]">Total Balance</p>
-          <h2 className="mt-1 text-4xl font-black">₹{balance.toLocaleString("en-IN")}</h2>
+          <h2 className="mt-1 text-4xl font-black">₹{(balance + winBalance).toLocaleString("en-IN")}</h2>
           <div className="mt-6 grid grid-cols-2 gap-3">
             <Link
               href="/deposit"

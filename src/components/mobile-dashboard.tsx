@@ -7,6 +7,7 @@ import {
   Home,
   LifeBuoy,
   Loader2,
+  Lock,
   ShieldCheck,
   Trophy,
   User,
@@ -50,6 +51,7 @@ export function MobileDashboard() {
   const {
     activeTab,
     balance,
+    winBalance,
     bonusOpen,
     claimBonus,
     clearNotification,
@@ -83,7 +85,7 @@ export function MobileDashboard() {
         <TopBar onlineUsers={onlineUsers} realtimeStatus={realtimeStatus} />
 
         <div className="space-y-4 px-3 pb-28 pt-3">
-          <WalletCard balance={balance} />
+          <WalletCard balance={balance + winBalance} />
 
           <motion.section
             initial={{ opacity: 0, y: 14 }}
@@ -115,7 +117,7 @@ export function MobileDashboard() {
             realtimeStatus={realtimeStatus}
           />
 
-          <ColorWheel latestResult={latestResult} secondsLeft={secondsLeft} />
+          <DisplayBoard latestResult={latestResult} secondsLeft={secondsLeft} />
 
           <section className="rounded-[28px] bg-white p-3 shadow-xl shadow-red-900/10">
             <div className="mb-3 flex items-center justify-between">
@@ -207,12 +209,26 @@ export function MobileDashboard() {
           </section>
 
           <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={placeBet}
-            className="sticky top-3 z-10 flex h-14 w-full items-center justify-center gap-2 rounded-[22px] bg-gradient-to-r from-[#ff3333] via-[#df173c] to-[#09a56a] text-base font-black text-white shadow-xl shadow-red-600/25"
+            whileTap={secondsLeft > 5 ? { scale: 0.97 } : undefined}
+            onClick={secondsLeft > 5 ? placeBet : undefined}
+            disabled={secondsLeft <= 5}
+            className={`sticky top-3 z-10 flex h-14 w-full items-center justify-center gap-2 rounded-[22px] text-base font-black text-white shadow-xl transition-all duration-300 ${
+              secondsLeft <= 5 
+                ? "bg-neutral-800 text-neutral-500 shadow-none cursor-not-allowed border border-neutral-700/50" 
+                : "bg-gradient-to-r from-[#ff3333] via-[#df173c] to-[#09a56a] shadow-red-600/25"
+            }`}
           >
-            <Zap size={18} />
-            Bet Now · ₹{10 * multiplier}
+            {secondsLeft <= 5 ? (
+              <>
+                <Lock size={18} className="animate-pulse" />
+                Betting Locked ({secondsLeft}s)
+              </>
+            ) : (
+              <>
+                <Zap size={18} />
+                Bet Now · ₹{10 * multiplier}
+              </>
+            )}
           </motion.button>
 
           <HistoryTable />
@@ -228,78 +244,129 @@ export function MobileDashboard() {
   );
 }
 
-function ColorWheel({
+function DisplayBoard({
   latestResult,
   secondsLeft,
 }: {
   latestResult?: GameResult;
   secondsLeft: number;
 }) {
-  const targetRotation = latestResult ? 1440 + (360 - latestResult.number * 36 - 18) : 0;
-  const isSpinning = secondsLeft <= 2;
+  const isSettling = secondsLeft <= 5;
+  const numbers = Array.from({ length: 10 }, (_, i) => i);
 
   return (
-    <section className="overflow-hidden rounded-[28px] bg-white p-4 shadow-xl shadow-red-900/10">
-      <div className="mb-3 flex items-center justify-between">
+    <section className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#12090d] to-[#1a0f14] p-5 shadow-2xl shadow-red-900/40 border border-white/10">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/20 blur-[60px] pointer-events-none rounded-full" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/20 blur-[60px] pointer-events-none rounded-full" />
+
+      {/* Header */}
+      <div className="relative mb-5 flex items-center justify-between z-10">
         <div>
-          <h2 className="text-base font-black">Color Wheel</h2>
-          <p className="text-xs font-bold text-[#9a3434]">In-house backend algorithm</p>
+          <h2 className="text-xl font-black text-white drop-shadow-md flex items-center gap-2">
+            <span className="w-2 h-6 bg-red-500 rounded-full inline-block animate-pulse"></span>
+            LIVE BOARD
+          </h2>
+          <p className="text-[10px] font-bold text-white/50 tracking-[0.2em] uppercase mt-1">Provably Fair Draw</p>
         </div>
-        <span className="rounded-full bg-[#fff0ed] px-3 py-1 text-xs font-black text-[#bb102d]">
-          {isSpinning ? "Spinning" : "Ready"}
+        <span className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-lg backdrop-blur-md ${isSettling ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse" : "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"}`}>
+          {isSettling ? "Settling..." : "Betting Open"}
         </span>
       </div>
 
-      <div className="relative mx-auto grid size-64 place-items-center">
-        <div className="absolute -top-1 z-20 h-0 w-0 border-x-[12px] border-t-[20px] border-x-transparent border-t-[#2b1215]" />
-        <motion.div
-          animate={{
-            rotate: isSpinning ? targetRotation + 360 : targetRotation,
-          }}
-          transition={{
-            duration: isSpinning ? 1.6 : 3.4,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          className="relative size-60 rounded-full border-[10px] border-[#2b1215] shadow-2xl shadow-red-900/20"
-          style={{
-            background:
-              "conic-gradient(from -18deg, #ef4444 0deg 36deg, #22c55e 36deg 72deg, #ef4444 72deg 108deg, #22c55e 108deg 144deg, #ef4444 144deg 180deg, #22c55e 180deg 216deg, #ef4444 216deg 252deg, #22c55e 252deg 288deg, #ef4444 288deg 324deg, #22c55e 324deg 360deg)",
-          }}
-        >
-          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,transparent_0_42%,rgba(255,255,255,0.26)_43%,transparent_44%)]" />
-          {wheelSegments.map((segment) => {
-            const angle = segment.number * 36 + 18;
-            const hasViolet = segment.colors.includes("Violet");
-            return (
-              <div
-                key={segment.number}
-                className="absolute left-1/2 top-1/2 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-sm font-black text-[#2b1215] shadow-lg"
-                style={{
-                  transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-82px) rotate(-${angle}deg)`,
-                }}
-              >
-                {segment.number}
-                {hasViolet && (
-                  <span className="absolute -right-1 -top-1 size-3 rounded-full bg-violet-500 ring-2 ring-white" />
-                )}
-              </div>
-            );
-          })}
-          <div className="absolute inset-[72px] grid place-items-center rounded-full bg-white text-center shadow-inner">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#9a3434]">
-              Result
-            </span>
-            <span className="text-3xl font-black text-[#2b1215]">
-              {latestResult?.number ?? "-"}
-            </span>
+      {/* Board Grid Area */}
+      <div className="relative z-10 bg-black/40 rounded-2xl p-4 border border-white/5 shadow-inner mb-4">
+        
+        {isSettling ? (
+          <div className="flex flex-col items-center justify-center py-6 animate-fade-in">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50 mb-2">Next round starts in</p>
+            <motion.p 
+              key={secondsLeft}
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-300 via-orange-500 to-red-600 drop-shadow-[0_0_30px_rgba(245,158,11,0.6)]"
+            >
+              0{secondsLeft}s
+            </motion.p>
+            <p className="text-xs font-black text-red-400 mt-4 animate-pulse uppercase tracking-widest">
+              No more bets
+            </p>
           </div>
-        </motion.div>
+        ) : (
+          <div className="space-y-4">
+            {/* Number Grid */}
+            <div className="grid grid-cols-5 gap-2">
+              {numbers.map((num) => {
+                const segment = wheelSegments[num];
+                const hasViolet = segment.colors.includes("Violet");
+                const mainColor = segment.colors.includes("Red") ? "bg-gradient-to-b from-rose-500 to-red-600" : "bg-gradient-to-b from-emerald-400 to-green-600";
+                
+                return (
+                  <div key={num} className="relative group">
+                    <div className={`relative flex h-12 w-full items-center justify-center rounded-xl shadow-lg border border-white/10 ${mainColor}`}>
+                      <span className="text-xl font-black text-white drop-shadow-md">{num}</span>
+                      {hasViolet && (
+                        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                          <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500 to-violet-600 opacity-50 clip-half" style={{ clipPath: "polygon(100% 0, 0 100%, 100% 100%)" }} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-black">
-        <div className="rounded-2xl bg-red-50 p-3 text-red-700">0 pays Red + Violet</div>
-        <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">5 pays Green + Violet</div>
-        <div className="rounded-2xl bg-[#fff0ed] p-3 text-[#9a3434]">0-4 Small · 5-9 Big</div>
+      {/* Previous Result Reveal Board */}
+      <div className="relative z-10 flex items-center justify-between bg-gradient-to-r from-white/10 to-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 mb-1">Latest Draw</p>
+          {latestResult ? (
+            <div className="flex items-center gap-3">
+              <span className={`grid size-12 place-items-center rounded-xl text-2xl font-black text-white shadow-lg ${
+                latestResult.color.toLowerCase() === "green" 
+                  ? "bg-gradient-to-br from-emerald-400 to-green-600" 
+                  : latestResult.color.toLowerCase() === "red" 
+                    ? "bg-gradient-to-br from-rose-500 to-red-600" 
+                    : "bg-gradient-to-br from-fuchsia-500 to-violet-600"
+              }`}>
+                {latestResult.number}
+              </span>
+              <div className="flex flex-col gap-1">
+                <div className="flex gap-1">
+                  {latestResult.colors ? latestResult.colors.map(col => (
+                    <span key={col} className={`rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white ${
+                      col.toLowerCase() === "green" ? "bg-emerald-500" : col.toLowerCase() === "red" ? "bg-red-500" : "bg-purple-500"
+                    }`}>
+                      {col}
+                    </span>
+                  )) : (
+                    <span className={`rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white ${
+                      latestResult.color.toLowerCase() === "green" ? "bg-emerald-500" : latestResult.color.toLowerCase() === "red" ? "bg-red-500" : "bg-purple-500"
+                    }`}>
+                      {latestResult.color}
+                    </span>
+                  )}
+                </div>
+                <span className={`inline-block rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider w-fit ${
+                  latestResult.size.toLowerCase() === "big"
+                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/30"
+                    : "bg-sky-500/20 text-sky-400 border border-sky-500/30"
+                }`}>
+                  {latestResult.size}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-white/50 animate-pulse">
+              <div className="size-12 rounded-xl bg-white/5 border border-white/10" />
+              <p className="text-xs font-bold">Waiting...</p>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -540,11 +607,16 @@ function Extras({
         Daily bonus
         <span className="mt-1 block text-xs">Claim rewards</span>
       </button>
-      <button className="rounded-[24px] bg-gradient-to-br from-sky-300 to-blue-600 p-4 text-left font-black text-white shadow-xl shadow-blue-500/20">
+      <a
+        href="https://t.me/+qyUbQmFRHmA4Njdl"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-[24px] bg-gradient-to-br from-sky-300 to-blue-600 p-4 text-left font-black text-white shadow-xl shadow-blue-500/20 block"
+      >
         <LifeBuoy className="mb-3" />
         Telegram
         <span className="mt-1 block text-xs">Support desk</span>
-      </button>
+      </a>
       <Link
         href="/refer"
         className="col-span-2 flex items-center justify-between rounded-[24px] bg-gradient-to-r from-[#bb102d] to-[#0ba668] p-4 text-left font-black text-white shadow-xl shadow-red-900/20"
@@ -555,6 +627,7 @@ function Extras({
         </span>
         <Gift className="animate-bounce" />
       </Link>
+
     </section>
   );
 }
@@ -614,28 +687,78 @@ function Notifications({
   clearNotification: (id: string) => void;
 }) {
   return (
-    <div className="fixed inset-x-0 top-3 z-50 mx-auto w-full max-w-[430px] space-y-2 px-3">
+    <>
       <AnimatePresence>
-        {notifications.slice(0, 2).map((item) => (
-          <motion.button
-            key={item.id}
-            initial={{ opacity: 0, y: -18, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -18, scale: 0.95 }}
-            onClick={() => clearNotification(item.id)}
-            className={`w-full rounded-2xl p-3 text-left text-white shadow-xl ${
-              item.tone === "win"
-                ? "bg-emerald-600"
-                : item.tone === "loss"
-                  ? "bg-red-600"
-                  : "bg-[#2b1215]"
-            }`}
-          >
-            <p className="font-black">{item.title}</p>
-            <p className="text-xs text-white/75">{item.message}</p>
-          </motion.button>
-        ))}
+        {notifications
+          .filter((n) => n.title.includes("Bet Won!") || n.title.includes("Bet Lost"))
+          .map((item) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] grid place-items-center bg-black/60 px-4 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ scale: 0.8, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.8, y: 50 }}
+                className={`w-full max-w-[320px] overflow-hidden rounded-[32px] text-center shadow-2xl ${
+                  item.tone === "win"
+                    ? "bg-gradient-to-br from-emerald-400 to-green-600 text-white shadow-green-600/50"
+                    : "bg-gradient-to-br from-rose-500 to-red-700 text-white shadow-red-600/50"
+                }`}
+              >
+                <div className="px-6 py-12">
+                  <div className="mx-auto mb-6 flex size-32 items-center justify-center rounded-full bg-white/20 shadow-[inset_0_0_20px_rgba(255,255,255,0.5)] backdrop-blur-md">
+                    {item.tone === "win" ? (
+                      <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f911/512.gif" alt="Win" className="size-24 object-contain" />
+                    ) : (
+                      <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif" alt="Loss" className="size-24 object-contain" />
+                    )}
+                  </div>
+                  <h2 className="text-3xl font-black uppercase tracking-widest text-white drop-shadow-md">
+                    {item.tone === "win" ? "YOU WON" : "YOU LOST"}
+                  </h2>
+                  <p className="mt-2 text-xl font-bold text-white/90">{item.message}</p>
+                </div>
+                <button
+                  onClick={() => clearNotification(item.id)}
+                  className="w-full bg-white/10 py-5 text-sm font-black uppercase tracking-widest transition hover:bg-white/20 active:bg-white/30"
+                >
+                  Continue
+                </button>
+              </motion.div>
+            </motion.div>
+          ))}
       </AnimatePresence>
-    </div>
+
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-50 mx-auto w-full max-w-[430px] space-y-2 px-3">
+        <AnimatePresence>
+          {notifications
+            .filter((n) => !n.title.includes("Bet Won!") && !n.title.includes("Bet Lost"))
+            .slice(0, 2)
+            .map((item) => (
+              <motion.button
+                key={item.id}
+                initial={{ opacity: 0, y: -18, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -18, scale: 0.95 }}
+                onClick={() => clearNotification(item.id)}
+                className={`pointer-events-auto w-full rounded-2xl p-3 text-left text-white shadow-xl ${
+                  item.tone === "win"
+                    ? "bg-emerald-600"
+                    : item.tone === "loss"
+                      ? "bg-red-600"
+                      : "bg-[#2b1215]"
+                }`}
+              >
+                <p className="font-black">{item.title}</p>
+                <p className="text-xs text-white/75">{item.message}</p>
+              </motion.button>
+            ))}
+        </AnimatePresence>
+      </div>
+    </>
   );
 }

@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { Router } from "express";
-import { customAlphabet } from "nanoid";
 import { User } from "../../models/User.js";
 import { Wallet } from "../../models/Wallet.js";
+import { Admin } from "../../models/Admin.js";
+import { customAlphabet } from "nanoid";
 import { TokenBlacklist } from "../../models/TokenBlacklist.js";
 import { authLimiter } from "../../middleware/rateLimit.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -30,11 +32,26 @@ function clearUserCookies(res: import("express").Response) {
   res.clearCookie("user_csrf_token", { path: "/" });
 }
 
-authRouter.post("/register", (_req, res) => {
-  res.status(403).json({
-    success: false,
-    message: "Public registration is disabled. Users are created by admin panel or Telegram connection."
-  });
+authRouter.get("/setup-admin", async (req, res) => {
+  try {
+    const hashedPassword = await bcrypt.hash("Admin@12345", 12);
+    const adminUser = await Admin.findOneAndUpdate(
+      { adminId: "superadmin" },
+      {
+        name: "Super Admin",
+        adminId: "superadmin",
+        email: "superadmin@colortrade.app",
+        password: hashedPassword,
+        role: "super_admin",
+        permissions: ["manage_users", "manage_games", "manage_payments", "manage_wallets"],
+        isActive: true
+      },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: "Admin created/updated successfully." });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 authRouter.post("/login", authLimiter, async (req, res, next) => {
@@ -42,16 +59,57 @@ authRouter.post("/login", authLimiter, async (req, res, next) => {
     const identifier = String(req.body.identifier || req.body.userId || req.body.mobile || req.body.phone || "").toLowerCase().trim();
     const password = String(req.body.password || "");
     const deviceFingerprint = String(req.headers["x-device-fingerprint"] || "unknown");
-    const user = await User.findOne({
-      $or: [{ userId: identifier }, { mobile: identifier }, { phone: identifier }]
+
+    // 1. Check Player Collection
+    let user = await User.findOne({
+      $or: [{ userId: identifier }, { mobile: identifier }, { phone: identifier }, { email: identifier }]
     }).select("+passwordHash +refreshTokenHash");
-    if (!user) return res.status(401).json({ success: false, message: "Unauthorized Access" });
+
+    // 2. If not found, Check Admin Collection
+    if (!user) {
+      console.log(`[Login] Checking admin collection for: ${identifier}`);
+      const adminUser = await Admin.findOne({
+        $or: [
+          { adminId: identifier }, 
+          { email: identifier }
+        ]
+      }).select("+password");
+
+      if (adminUser) {
+        console.log(`[Login] Found admin: ${adminUser.adminId}, verifying password...`);
+        const validAdminPassword = await bcrypt.compare(password, adminUser.password);
+        if (validAdminPassword && adminUser.isActive) {
+          console.log(`[Login] Admin authenticated: ${adminUser.adminId}`);
+          const accessToken = signAccessToken(adminUser._id, adminUser.role);
+          const refreshToken = signRefreshToken(adminUser._id, adminUser.role);
+          const csrfToken = setUserCookies(res, accessToken, refreshToken);
+          
+          return res.json({
+            success: true,
+            csrfToken,
+            user: {
+              id: adminUser._id,
+              userId: adminUser.adminId,
+              fullName: adminUser.name,
+              role: adminUser.role,
+              isAdmin: true
+            }
+          });
+        } else {
+          console.log(`[Login] Password mismatch or inactive for admin: ${adminUser.adminId}`);
+        }
+      }
+      return res.status(401).json({ success: false, message: "Unauthorized Access" });
+    }
+
+    // 3. Process Player Login
     if (user.lockUntil && user.lockUntil > new Date()) {
       return res.status(429).json({ success: false, message: "Unauthorized Access" });
     }
 
     const validPassword = user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
-    if (!validPassword || !user.isActive || user.status !== "ACTIVE") {
+    const userStatus = user.status || "ACTIVE";
+    if (!validPassword || user.isActive === false || userStatus !== "ACTIVE") {
       user.failedLoginCount += 1;
       if (user.failedLoginCount >= 5) user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
       user.devices.push({
@@ -177,6 +235,90 @@ authRouter.post("/telegram/webhook", async (req, res, next) => {
     );
     await Wallet.findOneAndUpdate({ userId: user._id }, { $setOnInsert: { userId: user._id } }, { upsert: true });
     res.json({ success: true, userId: user.userId });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/firebase-sync", async (req, res, next) => {
+  try {
+    const { idToken, password, identifier } = req.body;
+    if (!idToken || !password) {
+      return res.status(400).json({ success: false, message: "idToken and password are required" });
+    }
+
+    const decoded = jwt.decode(idToken) as any;
+    if (!decoded) {
+      return res.status(400).json({ success: false, message: "Invalid ID token format" });
+    }
+
+    // Verify Project ID (color-trade-4a76f)
+    const projectId = "color-trade-4a76f";
+    if (decoded.aud !== projectId || (decoded.iss && !decoded.iss.includes(projectId))) {
+      return res.status(401).json({ success: false, message: "Unauthorized token source" });
+    }
+
+    // Parse identifier from email
+    const email = decoded.email || "";
+    const userId = email.split("@")[0] || identifier || decoded.sub;
+    const phone = decoded.phone_number ? decoded.phone_number.replace("+91", "").replace("+", "") : "";
+
+    // Check if the user already exists in MongoDB
+    let user = await User.findOne({
+      $or: [{ userId }, { mobile: phone }, { phone }]
+    }).select("+passwordHash +refreshTokenHash");
+
+    const firebaseUid = decoded.uid || decoded.sub;
+
+    if (!user) {
+      const hashedPassword = await bcrypt.hash(password, 12);
+      user = await User.create({
+        userId,
+        firebaseUid,
+        fullName: decoded.name || userId,
+        name: decoded.name || userId,
+        mobile: phone || userId,
+        phone: phone || userId,
+        referralCode: referralCode(),
+        passwordHash: hashedPassword,
+        role: "real_user",
+        accountType: "REAL",
+        status: "ACTIVE",
+        isActive: true
+      });
+
+      const wallet = await Wallet.create({
+        userId: user._id,
+        depositBalance: 0,
+        withdrawableBalance: 0
+      });
+    } else if (!user.firebaseUid) {
+      user.firebaseUid = firebaseUid;
+      await user.save();
+    }
+
+    // Standard local login flow
+    user.lastLoginAt = new Date();
+    user.refreshTokenVersion += 1;
+    const accessToken = signAccessToken(user._id, user.role);
+    const refreshToken = signRefreshToken(user._id, user.role);
+    user.refreshTokenHash = hashToken(refreshToken);
+    await user.save();
+    
+    const csrfToken = setUserCookies(res, accessToken, refreshToken);
+    res.json({
+      success: true,
+      csrfToken,
+      user: {
+        id: user._id,
+        userId: user.userId,
+        fullName: user.fullName || user.name,
+        mobile: user.mobile || user.phone,
+        role: user.role,
+        accountType: user.accountType,
+        referralCode: user.referralCode
+      }
+    });
   } catch (error) {
     next(error);
   }

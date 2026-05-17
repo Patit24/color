@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { collection, query, where, getDocs, limit } from "firebase/firestore";
 
 export function UserLogin() {
   const router = useRouter();
@@ -16,18 +17,113 @@ export function UserLogin() {
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Helper to dynamically look up the user's correct email/userId from Firestore
+  async function resolveFirebaseEmail(ident: string): Promise<string> {
+    const cleanId = ident.trim();
+    if (cleanId.includes("@")) return cleanId;
+
+    try {
+      const usersRef = collection(db, "users");
+      
+      // 1. Try querying by phone number (support raw 10-digit and +91 formats)
+      const phoneQueries = [cleanId];
+      if (/^\d{10}$/.test(cleanId)) {
+        phoneQueries.push(`+91${cleanId}`);
+      }
+
+      for (const p of phoneQueries) {
+        const qPhone = query(usersRef, where("phone", "==", p), limit(1));
+        const snapPhone = await getDocs(qPhone);
+        if (!snapPhone.empty) {
+          const data = snapPhone.docs[0].data();
+          if (data.userId) {
+            console.log(`Resolved mobile number ${cleanId} to user:`, data.userId);
+            return `${data.userId}@colortrade.app`;
+          }
+        }
+      }
+
+      // 2. Try querying by userId
+      const qUser = query(usersRef, where("userId", "==", cleanId), limit(1));
+      const snapUser = await getDocs(qUser);
+      if (!snapUser.empty) {
+        const data = snapUser.docs[0].data();
+        if (data.userId) {
+          console.log(`Resolved userId identifier to user:`, data.userId);
+          return `${data.userId}@colortrade.app`;
+        }
+      }
+    } catch (e) {
+      console.warn("Firestore user lookup skipped or failed:", e);
+    }
+
+    // Default fallback format
+    console.log(`Using default fallback email resolution for identifier:`, cleanId);
+    return `${cleanId}@colortrade.app`;
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setStatus("");
-
     try {
-      // Firebase needs an email format. We map identifier (phone) to an internal email.
-      const email = identifier.includes("@") ? identifier : `${identifier}@colorpro.app`;
-      await signInWithEmailAndPassword(auth, email, password);
+      // 1. Authenticate with Local Backend API
+      const { apiRequest } = await import("@/lib/api-client");
+      const response = await apiRequest<{ success: boolean; user: any; message?: string }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ identifier: identifier, password })
+      });
+
+      if (!response.success) {
+        throw new Error(response.message || "Unauthorized Access");
+      }
+
+      // 2. Bridge to Firebase
+      try {
+        const userEmail = await resolveFirebaseEmail(identifier);
+        await signInWithEmailAndPassword(auth, userEmail, password);
+      } catch (firebaseError: any) {
+        if (firebaseError.code === "auth/user-not-found" || firebaseError.code === "auth/invalid-credential") {
+          try {
+            console.log("Auto-creating Firebase account to sync with backend...");
+            const userEmail = await resolveFirebaseEmail(identifier);
+            await createUserWithEmailAndPassword(auth, userEmail, password);
+          } catch (createError) {
+            console.warn("Firebase auto-create failed:", createError);
+          }
+        } else {
+          console.warn("Firebase bridge failed, but backend login succeeded:", firebaseError);
+        }
+      }
+
       router.push("/");
     } catch (error: any) {
-      setStatus(error.message || "Authentication failed");
+      const backendErrorMsg = error instanceof Error ? error.message : "Unauthorized Access";
+      // 3. Fallback: If local Express login failed (e.g. 401), try to verify against Firebase Auth
+      // and dynamically sync user metadata to MongoDB.
+      try {
+        setStatus("Verifying credentials via secure channel...");
+        const userEmail = await resolveFirebaseEmail(identifier);
+        const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+        const idToken = await userCredential.user.getIdToken();
+        
+        setStatus("Syncing account database...");
+        const { apiRequest } = await import("@/lib/api-client");
+        await apiRequest<{ success: boolean }>("/auth/firebase-sync", {
+          method: "POST",
+          body: JSON.stringify({ idToken, password, identifier })
+        });
+        
+        router.push("/");
+        return;
+      } catch (syncError: any) {
+        // Silently catch Firebase sync error and show the original backend error
+        // This prevents scary console errors when the user simply types the wrong password.
+        setStatus(backendErrorMsg);
+        setPassword("");
+        setSubmitting(false);
+        return;
+      }
     } finally {
       setSubmitting(false);
     }
