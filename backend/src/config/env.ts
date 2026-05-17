@@ -4,6 +4,10 @@ import { z } from "zod";
 dotenv.config({ path: "../.env" });
 dotenv.config();
 
+if (process.env.PORT === "") {
+  delete process.env.PORT;
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(8080),
