@@ -12,7 +12,7 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().default(8080),
   MONGO_URI: z.string().min(1),
-  REDIS_URL: z.string().min(1),
+  REDIS_URL: z.string().default("redis://localhost:6379"),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_SECRET: z.string().min(32).optional(),
