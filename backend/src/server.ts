@@ -6,6 +6,7 @@ import { createApp } from "./app.js";
 import { corsOriginResolver } from "./config/cors.js";
 import { registerSocketHandlers } from "./socket/index.js";
 import { GameEngine } from "./services/gameEngine.js";
+import { CrashEngine } from "./services/crashEngine.js";
 import { seedDefaultAccounts } from "./services/bootstrapService.js";
 
 async function bootstrap() {
@@ -20,9 +21,11 @@ async function bootstrap() {
     }
   });
 
-  registerSocketHandlers(io);
   const engine = new GameEngine(io);
+  const crashEngine = new CrashEngine(io);
+  registerSocketHandlers(io, crashEngine);
   engine.start();
+  crashEngine.start();
 
   server.listen(env.PORT, () => {
     console.log(`API and realtime engine running on :${env.PORT}`);
@@ -30,6 +33,7 @@ async function bootstrap() {
 
   process.on("SIGTERM", () => {
     engine.stop();
+    crashEngine.stop();
     server.close(() => process.exit(0));
   });
 }

@@ -16,6 +16,10 @@ const transactionSchema = new Schema(
         "BET_REFUNDED",
         "BET_WON",
         "BET_LOST",
+        "CRASH_BET",
+        "CRASH_WIN",
+        "SLOT_BET",
+        "SLOT_WIN",
         "BONUS_CREDITED",
         "REFERRAL_CREDITED",
         "ADMIN_ADJUSTMENT"

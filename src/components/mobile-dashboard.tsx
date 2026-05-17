@@ -654,23 +654,24 @@ function AdminPanel() {
 function BottomNav() {
   const items = [
     [Home, "Home", "/"],
-    [Trophy, "Activity", "/history"],
+    [Zap, "Crash", "/crash"],
+    [Trophy, "Slots", "/slots"],
     [Wallet, "Wallet", "/wallet"],
     [User, "Profile", "/profile"],
   ] as const;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[430px] border-t border-red-100 bg-white/90 px-4 pb-4 pt-2 shadow-2xl backdrop-blur">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-1">
         {items.map(([Icon, label, href], index) => (
           <Link
             key={label}
             href={href}
-            className={`grid place-items-center gap-1 rounded-2xl py-2 text-xs font-black ${
+            className={`grid place-items-center gap-1 rounded-2xl py-2 text-[10px] font-black ${
               index === 0 ? "bg-[#fff0ed] text-[#bb102d]" : "text-[#9a3434]"
             }`}
           >
-            <Icon size={20} />
+            <Icon size={18} />
             {label}
           </Link>
         ))}
