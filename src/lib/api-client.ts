@@ -1,4 +1,9 @@
-const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const isDev = process.env.NODE_ENV === "development";
+const apiBase = process.env.NEXT_PUBLIC_API_URL || (
+  isDev
+    ? "http://localhost:8080/api"
+    : "https://color-backend-api.onrender.com/api"
+);
 
 type RequestOptions = RequestInit & {
   token?: string | null;

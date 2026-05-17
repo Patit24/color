@@ -4,7 +4,13 @@ let socket: Socket | null = null;
 
 export function getSocket() {
   if (!socket) {
-    socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8080", {
+    const isDev = process.env.NODE_ENV === "development";
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (
+      isDev
+        ? "http://localhost:8080"
+        : "https://color-backend-api.onrender.com"
+    );
+    socket = io(socketUrl, {
       autoConnect: false,
       transports: ["websocket"],
       extraHeaders: {
