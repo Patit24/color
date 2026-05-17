@@ -25,4 +25,19 @@ const schema = z.object({
   CLIENT_ORIGIN: z.string().default("http://localhost:3000")
 });
 
-export const env = schema.parse(process.env);
+let parsedEnv;
+try {
+  parsedEnv = schema.parse(process.env);
+} catch (err) {
+  if (err instanceof z.ZodError) {
+    console.error("\n❌ ENVIRONMENT VALIDATION FAILED! Please check your Render/Railway environment variables:");
+    err.issues.forEach((issue) => {
+      console.error(`   👉 [${issue.path.join(".")}] - ${issue.message}`);
+    });
+    console.error("\nPlease add these missing variables in your hosting provider's dashboard and redeploy!\n");
+    process.exit(1);
+  }
+  throw err;
+}
+
+export const env = parsedEnv;
