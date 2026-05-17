@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node -e \"if (process.env.PORT === '') delete process.env.PORT; const { spawnSync } = require('child_process'); const res = spawnSync('next', ['start'], { stdio: 'inherit', shell: true }); process.exit(res.status);\"",
+    "start": "node -e \"const port = process.env.PORT || '3000'; const { spawnSync } = require('child_process'); const res = spawnSync('npx', ['serve', '-p', port, 'out'], { stdio: 'inherit', shell: true }); process.exit(res.status);\"",
     "lint": "eslint",
     "api:dev": "npm --prefix backend run dev",
     "api:build": "npm --prefix backend run build"
