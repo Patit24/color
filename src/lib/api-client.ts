@@ -27,8 +27,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       headers,
       credentials: "include",
     });
-  } catch {
-    throw new Error("Backend API is offline. Start the API server on localhost:8080 and try again.");
+  } catch (err) {
+    console.error("API Request failed to:", `${apiBase}${path}`, err);
+    throw new Error(`Backend API is offline at: ${apiBase}. Please check your connection.`);
   }
 
   const payload = await response.json().catch(() => ({}));
