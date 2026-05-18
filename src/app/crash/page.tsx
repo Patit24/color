@@ -46,6 +46,7 @@ function CrashGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const multiplierHistory = useRef<number[]>([]);
   const [localStartedAt, setLocalStartedAt] = useState<number | null>(null);
+  const lastServerTick = useRef<{ multiplier: number; receivedAt: number }>({ multiplier: 1.0, receivedAt: Date.now() });
 
   // Load history on mount
   useEffect(() => {
@@ -96,6 +97,7 @@ function CrashGame() {
       if (data.phase === "RUNNING") {
         const elapsed = Math.log(data.multiplier) / 0.15;
         setLocalStartedAt(Date.now() - elapsed * 1000);
+        lastServerTick.current = { multiplier: data.multiplier, receivedAt: Date.now() };
       } else {
         setLocalStartedAt(null);
       }
@@ -120,6 +122,7 @@ function CrashGame() {
       setBettingCountdown(data.bettingWindowMs / 1000);
       setMultiplier(1.0);
       setLocalStartedAt(null);
+      lastServerTick.current = { multiplier: 1.0, receivedAt: Date.now() };
       setHasBet(false);
       setCashedOut(false);
       setCashoutMultiplier(0);
@@ -135,11 +138,13 @@ function CrashGame() {
       setPhase("RUNNING");
       setLocalStartedAt(data.startedAt || Date.now());
       multiplierHistory.current = [1.0];
+      lastServerTick.current = { multiplier: 1.0, receivedAt: Date.now() };
     });
 
     socket.on("crash:tick", (data: any) => {
       // High-performance network feedback controller to keep client locally in perfect sync with server
       if (data.multiplier > 1.0) {
+        lastServerTick.current = { multiplier: data.multiplier, receivedAt: Date.now() };
         const serverElapsed = Math.log(data.multiplier) / 0.15;
         const targetStartedAt = Date.now() - serverElapsed * 1000;
         setLocalStartedAt((prev) => {
@@ -205,8 +210,19 @@ function CrashGame() {
 
     let animId: number;
     const updateLoop = () => {
-      const elapsed = (Date.now() - localStartedAt) / 1000;
-      const currentMult = Math.pow(Math.E, 0.15 * elapsed);
+      const now = Date.now();
+      const elapsed = (now - localStartedAt) / 1000;
+      let currentMult = Math.pow(Math.E, 0.15 * elapsed);
+
+      // CAPPING: Prevent client from extrapolating more than 200ms ahead of the last server tick.
+      // Growth in 200ms: multiplier * e^(0.15 * 0.2) = multiplier * 1.0304
+      const timeSinceLastTick = (now - lastServerTick.current.receivedAt) / 1000;
+      const maxExtrapolatedMult = lastServerTick.current.multiplier * Math.pow(Math.E, 0.15 * Math.min(0.20, timeSinceLastTick));
+      
+      if (currentMult > maxExtrapolatedMult) {
+        currentMult = maxExtrapolatedMult;
+      }
+
       setMultiplier(currentMult);
 
       const history = multiplierHistory.current;

@@ -108,12 +108,17 @@ function SlotMachine() {
       );
     }, 80);
 
+    const startTime = Date.now();
     try {
       const data = await apiRequest<SpinResult>("/slots/spin", {
         method: "POST",
         body: JSON.stringify({ amount: betAmount }),
         token,
       });
+
+      const elapsed = Date.now() - startTime;
+      const minDuration = 800; // 800ms minimum spin duration
+      const remainingDelay = Math.max(0, minDuration - elapsed);
 
       // Stop spinning after staggered delays per reel
       setTimeout(() => {
@@ -138,7 +143,7 @@ function SlotMachine() {
           },
           ...prev.slice(0, 19),
         ]);
-      }, 1000);
+      }, remainingDelay);
     } catch (err: any) {
       clearInterval(spinInterval);
       setSpinning(false);

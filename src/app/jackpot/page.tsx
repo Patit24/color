@@ -183,8 +183,14 @@ function JackpotSlot() {
       setReels(Array.from({length:3},()=>Array.from({length:3},()=>syms[Math.floor(Math.random()*syms.length)])));
     }, 80);
 
+    const startTime = Date.now();
     try {
       const data = await apiRequest<SpinResult>("/jackpot/spin",{method:"POST",body:JSON.stringify({amount:betAmount}),token});
+      
+      const elapsed = Date.now() - startTime;
+      const minDuration = 800; // 800ms minimum spin duration
+      const remainingDelay = Math.max(0, minDuration - elapsed);
+
       setTimeout(() => {
         if (spinIntervalRef.current) clearInterval(spinIntervalRef.current);
         setReels(data.reels);
@@ -201,7 +207,7 @@ function JackpotSlot() {
         } else if (data.totalWin > 0) {
           setTimeout(()=> setShowWin(true), 400);
         }
-      }, 1200);
+      }, remainingDelay);
     } catch (err:any) {
       if (spinIntervalRef.current) clearInterval(spinIntervalRef.current);
       setSpinning(false);
