@@ -141,7 +141,7 @@ export const useGameStore = create<GameState>()(
       winBalance: 0,
       ledger: [],
       realtimeStatus: "connecting",
-      activeTab: gameTabs[1],
+      activeTab: gameTabs[0],
       period: "Initializing...",
       secondsLeft: 0,
       selectedTarget: "green",

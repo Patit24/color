@@ -8,8 +8,8 @@ export type BetTarget =
 
 export type BetStatus = "Pending" | "Won" | "Lost";
 
-export type GameMode = "Win Go 30S" | "Win Go 1Min" | "Win Go 3Min" | "Win Go 5Min";
-export type BackendGameMode = "30S" | "1M" | "3M" | "5M";
+export type GameMode = "Win Go 30S" | "Win Go 1Min";
+export type BackendGameMode = "30S" | "1M";
 
 export type GameResult = {
   period: string;
@@ -33,7 +33,7 @@ export type UserBet = {
   profit: number;
 };
 
-export const gameTabs: GameMode[] = ["Win Go 30S", "Win Go 1Min", "Win Go 3Min", "Win Go 5Min"];
+export const gameTabs: GameMode[] = ["Win Go 30S", "Win Go 1Min"];
 
 export const multipliers = [1, 5, 10, 20, 50, 100];
 
@@ -62,15 +62,11 @@ export function formatMoney(value: number) {
 
 export function toBackendGameMode(mode: GameMode): BackendGameMode {
   if (mode === "Win Go 30S") return "30S";
-  if (mode === "Win Go 3Min") return "3M";
-  if (mode === "Win Go 5Min") return "5M";
   return "1M";
 }
 
 export function secondsForMode(mode: GameMode) {
   if (mode === "Win Go 30S") return 30;
-  if (mode === "Win Go 3Min") return 180;
-  if (mode === "Win Go 5Min") return 300;
   return 60;
 }
 

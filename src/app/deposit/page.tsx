@@ -46,7 +46,7 @@ export default function DepositPage() {
       <div className="space-y-4">
         <div className="rounded-[22px] bg-white p-6 shadow-xl shadow-red-900/10 text-center">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#9a3434]">Our UPI ID</p>
-          <p className="mt-2 text-xl font-bold text-[#bb102d]">admin@colortrade</p>
+          <p className="mt-2 text-xl font-bold text-[#bb102d]">9014842370@ybl</p>
           <p className="mt-1 text-[10px] text-gray-500">Please transfer exactly the amount you request below.</p>
         </div>
 

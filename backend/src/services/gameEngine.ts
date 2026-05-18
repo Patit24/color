@@ -5,14 +5,12 @@ import { Bet } from "../models/Bet.js";
 import { Round } from "../models/Round.js";
 import { creditWinnings } from "./walletService.js";
 
-type GameMode = "30S" | "1M" | "3M" | "5M";
+type GameMode = "30S" | "1M";
 type WheelColor = "RED" | "GREEN" | "VIOLET";
 
 const durations: Record<GameMode, number> = {
   "30S": 30,
-  "1M": 60,
-  "3M": 180,
-  "5M": 300
+  "1M": 60
 };
 
 function colorFor(number: number): WheelColor {
