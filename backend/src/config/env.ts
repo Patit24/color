@@ -19,6 +19,7 @@ const schema = z.object({
   ACCESS_TOKEN_EXPIRE: z.string().default("15m"),
   REFRESH_TOKEN_EXPIRE: z.string().default("7d"),
   FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   CRYPTO_DEPOSIT_WALLET: z.string().optional(),

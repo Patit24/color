@@ -14,7 +14,15 @@ try {
   const localKeyPath = path.resolve(__dirname, "../../firebase-service-account.json");
   let credential = admin.credential.applicationDefault();
 
-  if (fs.existsSync(rootKeyPath)) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      credential = admin.credential.cert(serviceAccount);
+      console.log("Initializing Firebase Admin with service account key from environment variable");
+    } catch (e: any) {
+      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable:", e.message);
+    }
+  } else if (fs.existsSync(rootKeyPath)) {
     const serviceAccount = JSON.parse(fs.readFileSync(rootKeyPath, "utf-8"));
     credential = admin.credential.cert(serviceAccount);
     console.log("Initializing Firebase Admin with service account key found at workspace root");
