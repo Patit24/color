@@ -15,8 +15,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest, getStoredToken } from "@/lib/api-client";
+import { auth } from "@/lib/firebase";
 
 type SlotSymbol = "cherry" | "lemon" | "bell" | "seven" | "diamond" | "wild" | "scatter";
 
@@ -50,7 +51,7 @@ interface SpinHistoryItem {
 }
 
 function SlotMachine() {
-  const [betAmount, setBetAmount] = useState(50);
+  const [betAmount, setBetAmount] = useState(2);
   const [spinning, setSpinning] = useState(false);
   const [reels, setReels] = useState<SlotSymbol[][]>([
     ["cherry", "lemon", "bell"],
@@ -65,6 +66,28 @@ function SlotMachine() {
   const [showHistory, setShowHistory] = useState(false);
   const [stats, setStats] = useState({ totalSpins: 0, totalBet: 0, totalWon: 0, biggestWin: 0, jackpots: 0 });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const idToken = await user.getIdToken();
+          const { apiRequest } = await import("@/lib/api-client");
+          const syncResponse = await apiRequest<{ success: boolean; accessToken?: string }>("/auth/firebase-sync", {
+            method: "POST",
+            body: JSON.stringify({ idToken })
+          });
+          if (syncResponse.accessToken) {
+            window.localStorage.setItem("accessToken", syncResponse.accessToken);
+            console.log("Backend authorization token synced on Slots mount!");
+          }
+        } catch (e: any) {
+          console.warn("Slots mount token sync failed:", e.message);
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const spin = useCallback(async () => {
     const token = getStoredToken();
@@ -115,7 +138,7 @@ function SlotMachine() {
           },
           ...prev.slice(0, 19),
         ]);
-      }, 1500);
+      }, 1000);
     } catch (err: any) {
       clearInterval(spinInterval);
       setSpinning(false);
@@ -283,8 +306,8 @@ function SlotMachine() {
           <section className="rounded-[28px] bg-[#12081e] border border-purple-500/20 p-4 space-y-4">
             <div>
               <label className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2 block">Bet Amount (₹)</label>
-              <div className="grid grid-cols-6 gap-2">
-                {[10, 50, 100, 200, 500, 1000].map((v) => (
+              <div className="grid grid-cols-7 gap-1.5">
+                {[2, 5, 10, 50, 100, 200, 500].map((v) => (
                   <button
                     key={v}
                     onClick={() => setBetAmount(v)}
@@ -348,7 +371,7 @@ function SlotMachine() {
               {(Object.entries(SYMBOL_CONFIG) as [SlotSymbol, typeof SYMBOL_CONFIG[SlotSymbol]][])
                 .filter(([sym]) => sym !== "wild" && sym !== "scatter")
                 .map(([sym, config]) => {
-                  const payouts: Record<string, number> = { cherry: 2, lemon: 3, bell: 5, seven: 10, diamond: 25 };
+                  const payouts: Record<string, number> = { cherry: 0.3, lemon: 0.5, bell: 0.8, seven: 2.0, diamond: 10.0 };
                   return (
                     <div key={sym} className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/5 p-2.5">
                       <span className="text-2xl">{config.emoji}</span>
@@ -402,17 +425,18 @@ function SlotMachine() {
 
         {/* Bottom Nav */}
         <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[430px] border-t border-white/10 bg-[#0a0610]/95 px-4 pb-4 pt-2 backdrop-blur">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-1">
             {[
               { icon: "🎨", label: "Color", href: "/" },
               { icon: "🚀", label: "Crash", href: "/crash" },
               { icon: "🎰", label: "Slots", href: "/slots" },
+              { icon: "🏆", label: "Jackpot", href: "/jackpot" },
               { icon: "👤", label: "Profile", href: "/profile" },
             ].map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className={`grid place-items-center gap-1 rounded-2xl py-2 text-xs font-black ${
+                className={`grid place-items-center gap-1 rounded-2xl py-2 text-[10px] font-black ${
                   item.href === "/slots" ? "bg-purple-500/20 text-purple-400" : "text-white/40"
                 }`}
               >

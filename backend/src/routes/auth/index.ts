@@ -11,8 +11,10 @@ import { requireAuth } from "../../middleware/auth.js";
 import { makeCsrfToken } from "../../middleware/adminAuth.js";
 import { cookieOptions, hashToken } from "../../utils/adminTokens.js";
 import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } from "../../utils/tokens.js";
+import { ensureWallet } from "../../services/walletService.js";
 
 const referralCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 8);
+const randomPassword = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 16);
 export const authRouter = Router();
 
 const accessCookieAge = 15 * 60 * 1000;
@@ -137,6 +139,7 @@ authRouter.post("/login", authLimiter, async (req, res, next) => {
     const csrfToken = setUserCookies(res, accessToken, refreshToken);
     res.json({
       success: true,
+      accessToken,
       csrfToken,
       user: {
         id: user._id,
@@ -243,8 +246,8 @@ authRouter.post("/telegram/webhook", async (req, res, next) => {
 authRouter.post("/firebase-sync", async (req, res, next) => {
   try {
     const { idToken, password, identifier } = req.body;
-    if (!idToken || !password) {
-      return res.status(400).json({ success: false, message: "idToken and password are required" });
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: "idToken is required" });
     }
 
     const decoded = jwt.decode(idToken) as any;
@@ -262,16 +265,16 @@ authRouter.post("/firebase-sync", async (req, res, next) => {
     const email = decoded.email || "";
     const userId = email.split("@")[0] || identifier || decoded.sub;
     const phone = decoded.phone_number ? decoded.phone_number.replace("+91", "").replace("+", "") : "";
+    const firebaseUid = decoded.uid || decoded.sub;
 
     // Check if the user already exists in MongoDB
     let user = await User.findOne({
-      $or: [{ userId }, { mobile: phone }, { phone }]
+      $or: [{ firebaseUid }, { userId }, { mobile: phone }, { phone }]
     }).select("+passwordHash +refreshTokenHash");
 
-    const firebaseUid = decoded.uid || decoded.sub;
-
     if (!user) {
-      const hashedPassword = await bcrypt.hash(password, 12);
+      const effectivePassword = password || randomPassword();
+      const hashedPassword = await bcrypt.hash(effectivePassword, 12);
       user = await User.create({
         userId,
         firebaseUid,
@@ -287,14 +290,13 @@ authRouter.post("/firebase-sync", async (req, res, next) => {
         isActive: true
       });
 
-      const wallet = await Wallet.create({
-        userId: user._id,
-        depositBalance: 0,
-        withdrawableBalance: 0
-      });
-    } else if (!user.firebaseUid) {
-      user.firebaseUid = firebaseUid;
+      await ensureWallet(String(user._id));
+    } else {
+      if (!user.firebaseUid) {
+        user.firebaseUid = firebaseUid;
+      }
       await user.save();
+      await ensureWallet(String(user._id));
     }
 
     // Standard local login flow
@@ -308,6 +310,7 @@ authRouter.post("/firebase-sync", async (req, res, next) => {
     const csrfToken = setUserCookies(res, accessToken, refreshToken);
     res.json({
       success: true,
+      accessToken,
       csrfToken,
       user: {
         id: user._id,

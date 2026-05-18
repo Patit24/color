@@ -62,6 +62,7 @@ type GameState = {
   selectedTarget: BetTarget;
   multiplier: number;
   baseStake: number;
+  setBaseStake: (stake: number) => void;
   onlineUsers: number;
   bonusOpen: boolean;
   history: GameResult[];
@@ -145,7 +146,7 @@ export const useGameStore = create<GameState>()(
       secondsLeft: 0,
       selectedTarget: "green",
       multiplier: 1,
-      baseStake: 10,
+      baseStake: 2,
       onlineUsers: 0,
       bonusOpen: false,
       history: [],
@@ -161,6 +162,7 @@ export const useGameStore = create<GameState>()(
       setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
       setSelectedTarget: (selectedTarget) => set({ selectedTarget }),
       setMultiplier: (multiplier) => set({ multiplier }),
+      setBaseStake: (baseStake) => set({ baseStake }),
       clearNotification: (id) =>
         set((state) => ({
           notifications: state.notifications.filter((item) => item.id !== id),
@@ -228,6 +230,22 @@ export const useGameStore = create<GameState>()(
           }
 
           // Logged-in mode: Sync wallet, live round, game history, transactions, and my bets
+          user.getIdToken().then(async (idToken) => {
+            try {
+              const { apiRequest } = await import("@/lib/api-client");
+              const syncResponse = await apiRequest<{ success: boolean; accessToken?: string }>("/auth/firebase-sync", {
+                method: "POST",
+                body: JSON.stringify({ idToken })
+              });
+              if (syncResponse.accessToken) {
+                window.localStorage.setItem("accessToken", syncResponse.accessToken);
+                console.log("Backend authorization token successfully synchronized in background!");
+              }
+            } catch (e: any) {
+              console.warn("Background backend sync failed:", e.message);
+            }
+          });
+
           const unsubWallet = onSnapshot(doc(db, "wallets", user.uid), (snap) => {
             if (snap.exists()) {
               const data = snap.data();
@@ -291,13 +309,27 @@ export const useGameStore = create<GameState>()(
             (snap) => {
               const bets = snap.docs.map((doc) => {
                 const data = doc.data();
+                const rawStatus = (data.status || "").toUpperCase();
+                const status = (rawStatus === "WON" || rawStatus === "WIN") 
+                  ? "Won" 
+                  : (rawStatus === "LOST" || rawStatus === "LOSS") 
+                    ? "Lost" 
+                    : "Pending";
+                const amount = data.amount || 0;
+                const winAmount = data.winAmount || 0;
+                const profit = status === "Won" 
+                  ? winAmount 
+                  : status === "Lost" 
+                    ? -amount 
+                    : 0;
+
                 return {
                   id: doc.id,
                   period: data.period,
                   target: data.targetValue || data.targetType || data.selection,
-                  amount: data.amount,
-                  status: (data.status === "WON" || data.status === "WIN") ? "Won" : (data.status === "LOST" || data.status === "LOSS") ? "Lost" : "Pending",
-                  profit: data.winAmount || data.profit || 0,
+                  amount,
+                  status,
+                  profit,
                   createdAt: data.createdAt?.toMillis() || Date.now(),
                 } as UserBet & { createdAt: number };
               });
@@ -305,16 +337,38 @@ export const useGameStore = create<GameState>()(
               bets.sort((a, b) => b.createdAt - a.createdAt);
 
               set((state) => {
-                const prevBets = state.myHistory;
                 let newNotifications = [...state.notifications];
                 
                 bets.forEach((newBet) => {
-                  const prevBet = prevBets.find((b) => b.id === newBet.id);
-                  if (prevBet && prevBet.status === "Pending" && newBet.status !== "Pending") {
-                    if (newBet.status === "Won") {
-                      newNotifications = [notify("Bet Won! 🎉", `You won ₹${newBet.profit}`, "win"), ...newNotifications];
-                    } else if (newBet.status === "Lost") {
-                      newNotifications = [notify("Bet Lost 😢", `You lost your bet`, "loss"), ...newNotifications];
+                  if (newBet.status !== "Pending") {
+                    const notifId = `bet-${newBet.id}`;
+                    const alreadyNotified = newNotifications.some((n) => n.id === notifId);
+                    
+                    if (!alreadyNotified) {
+                      const isRecent = Date.now() - newBet.createdAt < 120000; // settled within 2 minutes
+                      if (isRecent) {
+                        if (newBet.status === "Won") {
+                          newNotifications = [
+                            {
+                              id: notifId,
+                              title: "Bet Won! 🎉",
+                              message: `You won ₹${newBet.profit}`,
+                              tone: "win"
+                            },
+                            ...newNotifications
+                          ];
+                        } else if (newBet.status === "Lost") {
+                          newNotifications = [
+                            {
+                              id: notifId,
+                              title: "Bet Lost 😢",
+                              message: `You lost your bet of ₹${newBet.amount}`,
+                              tone: "loss"
+                            },
+                            ...newNotifications
+                          ];
+                        }
+                      }
                     }
                   }
                 });

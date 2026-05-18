@@ -25,8 +25,25 @@ export function registerSocketHandlers(io: Server, crashEngine?: CrashEngine) {
     });
 
     // ─── Crash Game ──────────────────────────────
-    socket.on("crash:join", () => {
+    socket.on("crash:join", async (data?: { token?: string }) => {
       socket.join("crash");
+      try {
+        let userId: string | undefined;
+        if (data?.token) {
+          const payload = verifyAccessToken(data.token);
+          userId = payload.userId;
+          socket.join(`wallet:${userId}`);
+        }
+        if (crashEngine) {
+          const state = await crashEngine.getSyncState(userId);
+          socket.emit("crash:sync", state);
+        }
+      } catch (err) {
+        if (crashEngine) {
+          const state = await crashEngine.getSyncState();
+          socket.emit("crash:sync", state);
+        }
+      }
     });
 
     socket.on("crash:leave", () => {

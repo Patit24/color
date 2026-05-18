@@ -69,17 +69,26 @@ exports.gameEngine = functions.scheduler.onSchedule("every 1 minutes", async (ev
                 isWin = true;
                 winAmount = bet.amount * 9;
             }
+            else if (bet.selection === "violet" && [0, 5].includes(resultNumber)) {
+                isWin = true;
+                winAmount = Math.round(bet.amount * 4.5);
+            }
             else if (bet.selection === resultColor) {
                 isWin = true;
-                winAmount = bet.amount * 2;
+                if ([0, 5].includes(resultNumber)) {
+                    winAmount = Math.round(bet.amount * 1.5);
+                }
+                else {
+                    winAmount = bet.amount * 3;
+                }
             }
             else if (bet.selection === "big" && resultNumber >= 5) {
                 isWin = true;
-                winAmount = bet.amount * 2;
+                winAmount = Math.round(bet.amount * 1.5);
             }
             else if (bet.selection === "small" && resultNumber < 5) {
                 isWin = true;
-                winAmount = bet.amount * 2;
+                winAmount = Math.round(bet.amount * 1.5);
             }
             batch.update(doc.ref, {
                 status: isWin ? "WIN" : "LOSS",

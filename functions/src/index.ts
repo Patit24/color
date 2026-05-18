@@ -49,15 +49,25 @@ export const gameEngine = functions.scheduler.onSchedule("every 1 minutes", asyn
       if (typeof bet.selection === "number" && bet.selection === resultNumber) {
         isWin = true;
         winAmount = bet.amount * 9;
+      } else if (bet.selection === "violet" && [0, 5].includes(resultNumber)) {
+        isWin = true;
+        winAmount = Math.round(bet.amount * 4.5);
       } else if (bet.selection === resultColor) {
         isWin = true;
-        winAmount = bet.amount * 2;
+        // RED or GREEN selection wins
+        if ([0, 5].includes(resultNumber)) {
+          // Half-win payout for shared colors (0/5)
+          winAmount = Math.round(bet.amount * 1.5);
+        } else {
+          // Perfect color with exact number takes 3x of actual bet price
+          winAmount = bet.amount * 3;
+        }
       } else if (bet.selection === "big" && resultNumber >= 5) {
         isWin = true;
-        winAmount = bet.amount * 2;
+        winAmount = Math.round(bet.amount * 1.5); // "only big or small predicts user bet price is 10 he win only 15"
       } else if (bet.selection === "small" && resultNumber < 5) {
         isWin = true;
-        winAmount = bet.amount * 2;
+        winAmount = Math.round(bet.amount * 1.5); // "only big or small predicts user bet price is 10 he win only 15"
       }
 
       batch.update(doc.ref, {

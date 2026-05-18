@@ -1,9 +1,14 @@
-const isDev = process.env.NODE_ENV === "development";
-const apiBase = process.env.NEXT_PUBLIC_API_URL || (
-  isDev
-    ? "http://localhost:8080/api"
-    : "https://color-backend-api.onrender.com/api"
-);
+const getApiBase = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  const isDev = process.env.NODE_ENV === "development";
+  if (!isDev) return "https://color-backend-api.onrender.com/api";
+  
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8080/api`;
+  }
+  return "http://localhost:8080/api";
+};
+const apiBase = getApiBase();
 
 type RequestOptions = RequestInit & {
   token?: string | null;
@@ -54,6 +59,40 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         window.location.href = "/admin/login";
       }
       throw new Error("Admin session expired. Please log in again.");
+    }
+  }
+
+  // Self-healing token sync for regular users
+  if (
+    response.status === 401 &&
+    !path.startsWith("/auth/") &&
+    !path.startsWith("/admin-auth/") &&
+    !options.skipRefresh
+  ) {
+    try {
+      const { auth } = await import("@/lib/firebase");
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const idToken = await firebaseUser.getIdToken(true);
+        const syncResponse = await apiRequest<{ success: boolean; accessToken?: string }>("/auth/firebase-sync", {
+          method: "POST",
+          body: JSON.stringify({ idToken }),
+          skipRefresh: true,
+        });
+        if (syncResponse.accessToken) {
+          window.localStorage.setItem("accessToken", syncResponse.accessToken);
+          return apiRequest<T>(path, { ...options, skipRefresh: true });
+        }
+      } else {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("accessToken");
+        }
+      }
+    } catch (e) {
+      console.warn("Auto-healing firebase-sync failed:", e);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("accessToken");
+      }
     }
   }
 

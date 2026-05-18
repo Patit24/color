@@ -15,6 +15,7 @@ import { walletRouter } from "./routes/wallet/index.js";
 import { referralRouter } from "./routes/referral/index.js";
 import { crashRouter } from "./routes/crash/index.js";
 import { slotsRouter } from "./routes/slots/index.js";
+import { jackpotRouter } from "./routes/jackpot/index.js";
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp() {
   app.use("/api/referrals", referralRouter);
   app.use("/api/crash", crashRouter);
   app.use("/api/slots", slotsRouter);
+  app.use("/api/jackpot", jackpotRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
     void next;

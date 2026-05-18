@@ -5,11 +5,18 @@ let socket: Socket | null = null;
 export function getSocket() {
   if (!socket) {
     const isDev = process.env.NODE_ENV === "development";
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (
-      isDev
-        ? "http://localhost:8080"
-        : "https://color-backend-api.onrender.com"
-    );
+    let socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+    if (!socketUrl) {
+      if (isDev) {
+        if (typeof window !== "undefined") {
+          socketUrl = `http://${window.location.hostname}:8080`;
+        } else {
+          socketUrl = "http://localhost:8080";
+        }
+      } else {
+        socketUrl = "https://color-backend-api.onrender.com";
+      }
+    }
     socket = io(socketUrl, {
       autoConnect: false,
       transports: ["websocket"],

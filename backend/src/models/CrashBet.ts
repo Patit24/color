@@ -5,7 +5,7 @@ const crashBetSchema = new Schema(
     userId: { type: Types.ObjectId, ref: "User", required: true, index: true },
     roundId: { type: Types.ObjectId, ref: "CrashRound", required: true, index: true },
     roundNumber: { type: Number, required: true, index: true },
-    amount: { type: Number, required: true, min: 10 },
+    amount: { type: Number, required: true, min: 2 },
     autoCashout: { type: Number, default: 0 }, // 0 = manual
     cashedOutAt: { type: Number, default: 0 }, // multiplier at cashout
     payout: { type: Number, default: 0 },

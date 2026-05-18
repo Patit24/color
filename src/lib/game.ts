@@ -110,6 +110,7 @@ export function targetLabel(target: BetTarget) {
 export function payoutForTarget(target: BetTarget, amount: number) {
   if (target === "violet") return Math.round(amount * 4.5);
   if (target.startsWith("number-")) return amount * 9;
+  if (target === "big" || target === "small") return Math.round(amount * 1.5);
   return amount * 2;
 }
 

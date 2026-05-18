@@ -3,12 +3,16 @@ import { env } from "./env.js";
 
 export async function connectMongo() {
   if (env.MONGO_URI === "memory") {
-    const { MongoMemoryServer } = await import("mongodb-memory-server");
-    const memoryServer = await MongoMemoryServer.create();
-    await mongoose.connect(memoryServer.getUri(), {
+    const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+    const replSet = await MongoMemoryReplSet.create({
+      replSet: {
+        storageEngine: "wiredTiger",
+      },
+    });
+    await mongoose.connect(replSet.getUri(), {
       autoIndex: true
     });
-    console.log("Using in-memory MongoDB for local development");
+    console.log("Using in-memory MongoDB Replica Set for local development (transactions supported)");
     return;
   }
 

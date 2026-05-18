@@ -42,10 +42,13 @@ function wins(bet: { targetType: string; targetValue: string }, number: number) 
   return bet.targetValue === sizeFor(number);
 }
 
-function oddsFor(bet: { targetType: string; targetValue: string }) {
+function oddsFor(bet: { targetType: string; targetValue: string }, resultNumber: number) {
   if (bet.targetType === "NUMBER") return 9;
+  if (bet.targetType === "SIZE") return 1.5; // Big / Small pays 1.5x (user bet price 10 wins 15)
   if (bet.targetValue === "VIOLET") return 4.5;
-  return 2;
+  // If targetValue is RED or GREEN, but the result includes VIOLET too (i.e. number is 0 or 5):
+  if (resultNumber === 0 || resultNumber === 5) return 1.5; // Half-win payout
+  return 3; // Perfect color with exact number takes 3x (win is 3x times of actual bet price)
 }
 
 export class GameEngine {
@@ -118,9 +121,11 @@ export class GameEngine {
     for (const bet of bets) {
       totalStake += bet.amount;
       const won = wins(bet, resultNumber);
-      const payout = won ? Math.round(bet.amount * oddsFor(bet)) : 0;
+      const exactOdds = oddsFor(bet, resultNumber);
+      const payout = won ? Math.round(bet.amount * exactOdds) : 0;
       totalPayout += payout;
       bet.status = won ? "WON" : "LOST";
+      bet.odds = exactOdds; // Update stored odds to show actual payout multiplier
       bet.payout = payout;
       bet.profit = won ? payout - bet.amount : -bet.amount;
       await bet.save();

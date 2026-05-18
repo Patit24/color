@@ -21,7 +21,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const payload = verifyAccessToken(token);
     const user = await User.findById(payload.userId).select("isActive status role");
-    if (!user?.isActive || user.status !== "ACTIVE") {
+    if (!user) {
+      return res.status(401).json({ success: false, message: "User session is invalid. Please log in again." });
+    }
+    if (!user.isActive || user.status !== "ACTIVE") {
       return res.status(401).json({ success: false, message: "Unauthorized Access" });
     }
     req.auth = payload;

@@ -69,13 +69,17 @@ export function UserLogin() {
     try {
       // 1. Authenticate with Local Backend API
       const { apiRequest } = await import("@/lib/api-client");
-      const response = await apiRequest<{ success: boolean; user: any; message?: string }>("/auth/login", {
+      const response = await apiRequest<{ success: boolean; user: any; accessToken?: string; message?: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ identifier: identifier, password })
       });
 
       if (!response.success) {
         throw new Error(response.message || "Unauthorized Access");
+      }
+
+      if (response.accessToken) {
+        window.localStorage.setItem("accessToken", response.accessToken);
       }
 
       // 2. Bridge to Firebase
@@ -109,10 +113,14 @@ export function UserLogin() {
         
         setStatus("Syncing account database...");
         const { apiRequest } = await import("@/lib/api-client");
-        await apiRequest<{ success: boolean }>("/auth/firebase-sync", {
+        const syncResponse = await apiRequest<{ success: boolean; accessToken?: string }>("/auth/firebase-sync", {
           method: "POST",
           body: JSON.stringify({ idToken, password, identifier })
         });
+        
+        if (syncResponse.accessToken) {
+          window.localStorage.setItem("accessToken", syncResponse.accessToken);
+        }
         
         router.push("/");
         return;

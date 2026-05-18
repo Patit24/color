@@ -9,6 +9,7 @@ import {
   Loader2,
   Lock,
   ShieldCheck,
+  Sparkles,
   Trophy,
   User,
   Wallet,
@@ -66,6 +67,8 @@ export function MobileDashboard() {
     setActiveTab,
     setMultiplier,
     setSelectedTarget,
+    baseStake,
+    setBaseStake,
   } = useGameStore();
   const latestResult = useGameStore((state) => state.history[0]);
 
@@ -141,20 +144,50 @@ export function MobileDashboard() {
               ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-6 gap-2">
-              {multipliers.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setMultiplier(item)}
-                  className={`h-9 rounded-full text-xs font-black ${
-                    multiplier === item
-                      ? "bg-[#2a1212] text-white"
-                      : "bg-[#fff0ed] text-[#9a3434]"
-                  }`}
-                >
-                  X{item}
-                </button>
-              ))}
+            {/* Stake Amount Selector */}
+            <div className="flex flex-col gap-2 mt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Stake Amount (₹)</span>
+                <span className="text-xs font-black text-[#9a3434] bg-[#fff0ed] px-2 py-0.5 rounded-md">Selected: ₹{baseStake}</span>
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scroll">
+                {[2, 5, 10, 50, 100, 500, 1000].map((stake) => (
+                  <button
+                    key={stake}
+                    onClick={() => setBaseStake(stake)}
+                    className={`h-9 px-4 rounded-full text-xs font-black shrink-0 transition-all ${
+                      baseStake === stake
+                        ? "bg-[#df173c] text-white shadow-md shadow-red-500/20 scale-105"
+                        : "bg-[#fff0ed] text-[#9a3434] hover:bg-[#ffe3dc]"
+                    }`}
+                  >
+                    ₹{stake}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Multiplier Selector */}
+            <div className="flex flex-col gap-2 mt-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-neutral-500 uppercase tracking-wider">Multiplier (X)</span>
+                <span className="text-xs font-black text-[#2a1212] bg-neutral-100 px-2 py-0.5 rounded-md">Selected: X{multiplier}</span>
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scroll">
+                {multipliers.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setMultiplier(item)}
+                    className={`h-9 w-11 rounded-full text-xs font-black shrink-0 transition-all ${
+                      multiplier === item
+                        ? "bg-[#2a1212] text-white shadow-md scale-105"
+                        : "bg-[#fff0ed] text-[#9a3434] hover:bg-[#ffe3dc]"
+                    }`}
+                  >
+                    X{item}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -226,7 +259,7 @@ export function MobileDashboard() {
             ) : (
               <>
                 <Zap size={18} />
-                Bet Now · ₹{10 * multiplier}
+                Bet Now · ₹{baseStake * multiplier}
               </>
             )}
           </motion.button>
@@ -598,6 +631,21 @@ function Extras({
 }) {
   return (
     <section className="grid grid-cols-2 gap-3">
+      <Link
+        href="/jackpot"
+        className="col-span-2 relative overflow-hidden flex items-center justify-between rounded-[24px] bg-gradient-to-r from-[#3d1a00] via-[#7b3500] to-[#3d1a00] border border-yellow-500/30 p-4 shadow-xl shadow-yellow-900/30"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(245,158,11,0.12),transparent_70%)] pointer-events-none" />
+        <span className="relative">
+          <span className="text-2xl mb-1 block">🏆</span>
+          <span className="font-black text-yellow-300 text-base block leading-none">Progressive Jackpot</span>
+          <span className="mt-1 block text-xs text-yellow-200/60">Mini · Major · Mega pools</span>
+        </span>
+        <span className="relative flex flex-col items-end gap-1.5">
+          <span className="text-xs font-black text-yellow-400 bg-yellow-500/20 border border-yellow-500/30 rounded-full px-3 py-1 animate-pulse">PLAY NOW</span>
+          <span className="text-[10px] text-yellow-300/50">Bonus chest rounds 🎁</span>
+        </span>
+      </Link>
       <button
         onClick={claimBonus}
         disabled={!bonusOpen}
@@ -656,13 +704,14 @@ function BottomNav() {
     [Home, "Home", "/"],
     [Zap, "Crash", "/crash"],
     [Trophy, "Slots", "/slots"],
+    [Sparkles, "Jackpot", "/jackpot"],
     [Wallet, "Wallet", "/wallet"],
     [User, "Profile", "/profile"],
   ] as const;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[430px] border-t border-red-100 bg-white/90 px-4 pb-4 pt-2 shadow-2xl backdrop-blur">
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-6 gap-1">
         {items.map(([Icon, label, href], index) => (
           <Link
             key={label}

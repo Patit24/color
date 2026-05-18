@@ -10,8 +10,8 @@ export const slotsRouter = Router();
 slotsRouter.post("/spin", requireAuth, bettingLimiter, async (req, res, next) => {
   try {
     const amount = Number(req.body.amount);
-    if (!amount || amount < 10) {
-      return res.status(400).json({ error: "Minimum bet is ₹10" });
+    if (!amount || amount < 2) {
+      return res.status(400).json({ error: "Minimum bet is ₹2" });
     }
 
     const result = await executeSpin(
@@ -22,7 +22,10 @@ slotsRouter.post("/spin", requireAuth, bettingLimiter, async (req, res, next) =>
     );
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "Insufficient balance" || error.message.includes("bet") || error.message.includes("Bet")) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 });

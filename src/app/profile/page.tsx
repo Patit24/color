@@ -57,6 +57,15 @@ export default function ProfilePage() {
     setLoggingOut(true);
     setError("");
     try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("accessToken");
+      }
+      try {
+        const { apiRequest } = await import("@/lib/api-client");
+        await apiRequest("/auth/logout", { method: "POST" });
+      } catch (err) {
+        console.warn("Backend logout failed:", err);
+      }
       await signOut(auth);
       router.replace("/login");
     } catch (err) {

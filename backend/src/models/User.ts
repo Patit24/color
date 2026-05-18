@@ -41,9 +41,10 @@ const userSchema = new Schema(
     lockUntil: { type: Date },
     devices: [deviceSchema],
     loginHistory: [deviceSchema],
-    createdByAdmin: { type: Types.ObjectId, ref: "Admin" },
     passwordChangeRequired: { type: Boolean, default: false },
-    lastLoginAt: { type: Date }
+    lastLoginAt: { type: Date },
+    bankruptcyRecoveryTriggered: { type: Boolean, default: false },
+    newUserRewardTriggered: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
