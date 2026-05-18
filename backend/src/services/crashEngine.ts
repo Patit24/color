@@ -289,6 +289,10 @@ export class CrashEngine {
     const round = await CrashRound.findById(this.currentRoundId);
     if (!round || round.status !== "BETTING") throw new Error("Betting is closed");
 
+    if (this.bettingCountdown <= 5) {
+      throw new Error("Betting is locked (starts in less than 5 seconds)");
+    }
+
     // Check if user already bet this round
     const existing = await CrashBet.findOne({ userId, roundId: round._id });
     if (existing) throw new Error("Already placed a bet this round");

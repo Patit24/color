@@ -416,9 +416,10 @@ function CrashGame() {
   const placeBet = useCallback(() => {
     const token = getStoredToken();
     if (!token) return alert("Please login first");
+    if (bettingCountdown <= 5) return alert("Betting is locked (starts in less than 5 seconds)");
     const socket = getSocket();
     socket.emit("crash:place_bet", { amount: betAmount, autoCashout, token });
-  }, [betAmount, autoCashout]);
+  }, [betAmount, autoCashout, bettingCountdown]);
 
   const cashout = useCallback(() => {
     const token = getStoredToken();
@@ -503,9 +504,13 @@ function CrashGame() {
                       transition={{ duration: 1.5, repeat: Infinity }}
                       className="text-center bg-[#0a0a12]/60 px-6 py-4 rounded-3xl backdrop-blur-md border border-white/5"
                     >
-                      <Rocket size={48} className="mx-auto mb-2 text-orange-400" />
-                      <p className="text-3xl font-black text-white">Place Bets</p>
-                      <p className="text-base font-bold text-amber-400 mt-0.5">{Math.ceil(bettingCountdown)}s remaining</p>
+                      <Rocket size={48} className={`mx-auto mb-2 ${bettingCountdown <= 5 ? "text-red-500" : "text-orange-400"}`} />
+                      <p className="text-3xl font-black text-white">
+                        {bettingCountdown <= 5 ? "Betting Locked" : "Place Bets"}
+                      </p>
+                      <p className={`text-base font-bold mt-0.5 ${bettingCountdown <= 5 ? "text-red-400" : "text-amber-400"}`}>
+                        {bettingCountdown <= 5 ? "Starting soon..." : `${Math.ceil(bettingCountdown)}s remaining`}
+                      </p>
                     </motion.div>
                   )}
 
@@ -667,14 +672,20 @@ function CrashGame() {
 
             {/* Action Button */}
             {phase === "BETTING" && !hasBet ? (
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={placeBet}
-                className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 py-4 text-lg font-black text-white shadow-xl shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-300"
-              >
-                <Zap size={20} className="inline mr-2" />
-                Place Bet · ₹{betAmount.toLocaleString("en-IN")}
-              </motion.button>
+              bettingCountdown <= 5 ? (
+                <div className="w-full rounded-2xl bg-red-500/20 border border-red-500/30 py-4 text-center text-red-400 font-black shadow-lg">
+                  Betting Locked (Starting soon...)
+                </div>
+              ) : (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={placeBet}
+                  className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 py-4 text-lg font-black text-white shadow-xl shadow-purple-600/30 hover:shadow-purple-600/50 transition-all duration-300"
+                >
+                  <Zap size={20} className="inline mr-2" />
+                  Place Bet · ₹{betAmount.toLocaleString("en-IN")}
+                </motion.button>
+              )
             ) : phase === "RUNNING" && hasBet && !cashedOut ? (
               <motion.button
                 whileTap={{ scale: 0.97 }}
