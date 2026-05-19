@@ -90,6 +90,91 @@ export function MobileDashboard() {
         <div className="space-y-4 px-3 pb-28 pt-3">
           <WalletCard balance={balance + winBalance} />
 
+          {/* Indian Real-Money Gaming Lobby */}
+          <motion.section
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#0c0800] via-[#241702] to-[#0c0800] p-5 shadow-2xl border border-[#d4af37]/30"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(212,175,55,0.08),transparent_70%)] pointer-events-none" />
+            <div className="flex items-center justify-between mb-4 relative z-10">
+              <div>
+                <h2 className="text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-amber-500 flex items-center gap-2 drop-shadow">
+                  👑 CASINO LOBBY
+                </h2>
+                <p className="text-[9px] font-bold text-yellow-500/60 tracking-wider uppercase">Live Players · Cash Rewards</p>
+              </div>
+              <span className="rounded-full bg-yellow-500/20 border border-yellow-500/40 px-2 py-0.5 text-[8px] font-black text-yellow-300 uppercase tracking-widest animate-pulse">
+                HOT
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 relative z-10">
+              <Link
+                href="/teen-patti"
+                className="relative overflow-hidden group flex flex-col justify-between rounded-2xl bg-gradient-to-br from-[#1c120c] to-[#0f0a06] border border-yellow-500/20 p-3 h-28 hover:border-yellow-500/50 transition-all shadow-lg text-left"
+              >
+                <div className="absolute top-1 right-2 text-2xl group-hover:scale-110 transition-transform">👑</div>
+                <div>
+                  <span className="rounded bg-yellow-500/20 border border-yellow-500/30 text-[8px] font-black text-yellow-400 px-1 py-0.5 uppercase tracking-wider">HOT</span>
+                  <h3 className="text-xs font-black text-yellow-100 mt-1">Teen Patti</h3>
+                  <p className="text-[8px] text-white/50 leading-tight mt-0.5">Joker, Muflis, AK47</p>
+                </div>
+                <span className="text-[9px] font-black text-yellow-400/80">Play Now →</span>
+              </Link>
+
+              <Link
+                href="/andar-bahar"
+                className="relative overflow-hidden group flex flex-col justify-between rounded-2xl bg-gradient-to-br from-[#1c120c] to-[#0f0a06] border border-yellow-500/20 p-3 h-28 hover:border-yellow-500/50 transition-all shadow-lg text-left"
+              >
+                <div className="absolute top-1 right-2 text-2xl group-hover:scale-110 transition-transform">🃏</div>
+                <div>
+                  <span className="rounded bg-emerald-500/20 border border-emerald-500/30 text-[8px] font-black text-emerald-400 px-1 py-0.5 uppercase tracking-wider">FAST</span>
+                  <h3 className="text-xs font-black text-yellow-100 mt-1">Andar Bahar</h3>
+                  <p className="text-[8px] text-white/50 leading-tight mt-0.5">Quick Card Match</p>
+                </div>
+                <span className="text-[9px] font-black text-yellow-400/80">Play Now →</span>
+              </Link>
+
+              <Link
+                href="/rummy"
+                className="relative overflow-hidden group flex flex-col justify-between rounded-2xl bg-gradient-to-br from-[#1c120c] to-[#0f0a06] border border-yellow-500/20 p-3 h-28 hover:border-yellow-500/50 transition-all shadow-lg text-left"
+              >
+                <div className="absolute top-1 right-2 text-2xl group-hover:scale-110 transition-transform">🂠</div>
+                <div>
+                  <span className="rounded bg-indigo-500/20 border border-indigo-500/30 text-[8px] font-black text-indigo-400 px-1 py-0.5 uppercase tracking-wider">SKILL</span>
+                  <h3 className="text-xs font-black text-yellow-100 mt-1">Indian Rummy</h3>
+                  <p className="text-[8px] text-white/50 leading-tight mt-0.5">Points, Deals, Pool</p>
+                </div>
+                <span className="text-[9px] font-black text-yellow-400/80">Play Now →</span>
+              </Link>
+
+              <Link
+                href="/call-break"
+                className="relative overflow-hidden group flex flex-col justify-between rounded-2xl bg-gradient-to-br from-[#1c120c] to-[#0f0a06] border border-yellow-500/20 p-3 h-28 hover:border-yellow-500/50 transition-all shadow-lg text-left"
+              >
+                <div className="absolute top-1 right-2 text-2xl group-hover:scale-110 transition-transform">⚔️</div>
+                <div>
+                  <span className="rounded bg-amber-500/20 border border-amber-500/30 text-[8px] font-black text-amber-400 px-1 py-0.5 uppercase tracking-wider">PVP</span>
+                  <h3 className="text-xs font-black text-yellow-100 mt-1">Call Break</h3>
+                  <p className="text-[8px] text-white/50 leading-tight mt-0.5">Spades Strategy</p>
+                </div>
+                <span className="text-[9px] font-black text-yellow-400/80">Play Now →</span>
+              </Link>
+            </div>
+
+            {/* Daily Tournament Teaser */}
+            <div className="mt-4 relative overflow-hidden flex items-center justify-between rounded-2xl bg-[#ffd700]/10 border border-[#ffd700]/30 p-3 z-10 text-left">
+              <div>
+                <h4 className="text-xs font-black text-yellow-300 flex items-center gap-1">🏆 Daily Rummy Showdown</h4>
+                <p className="text-[9px] text-white/60">Prize Pool: ₹1,00,000 · Starts in 2h 15m</p>
+              </div>
+              <Link href="/rummy" className="bg-yellow-500 text-black text-[9px] font-black px-2 py-1 rounded">
+                ENTER
+              </Link>
+            </div>
+          </motion.section>
+
           <motion.section
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
